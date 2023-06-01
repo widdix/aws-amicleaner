@@ -1,0 +1,4 @@
+.github/
+coverage/
+test/
+.eslintrc.yml
