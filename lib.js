@@ -39,10 +39,12 @@ async function fetchInUseAMIIDs(ec2, autoscaling) {
 
   // in use by ASG -> Launch Configuration
   const inUseLCNames = asgs.filter(asg => 'LaunchConfigurationName' in asg).map(asg => asg.LaunchConfigurationName);
-  const {LaunchConfigurations: lcs} = await autoscaling.describeLaunchConfigurations({
-    LaunchConfigurationNames: inUseLCNames // FIXME Maximum number of 50 items, paging
-  }).promise();
-  lcs.forEach(lc => inUseAMIIDs.add(lc.ImageId));
+  if (inUseLCNames.length > 0) {
+    const {LaunchConfigurations: lcs} = await autoscaling.describeLaunchConfigurations({
+      LaunchConfigurationNames: inUseLCNames // FIXME Maximum number of 50 items, paging
+    }).promise();
+    lcs.forEach(lc => inUseAMIIDs.add(lc.ImageId));
+  }
 
   const inUseLTs = [
     ...asgs.filter(asg => 'LaunchTemplate' in asg).map(asg => ({id: asg.LaunchTemplate.LaunchTemplateId, version: asg.LaunchTemplate.Version})),
