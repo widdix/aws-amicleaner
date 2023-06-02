@@ -26,18 +26,20 @@ async function run({
   forceDelete,
   verbose
 }) {
+  const now = Date.now();
   const ec2 = new AWS.EC2({apiVersion: '2016-11-15'});
   const autoscaling = new AWS.AutoScaling({apiVersion: '2011-01-01'});
 
-  let amis = await fetchAMIs(ec2, autoscaling, includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays);
+  let amis = await fetchAMIs(now, ec2, autoscaling, includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays);
 
   if (verbose === true) {
     const pt = new PrettyTable();
     pt.sortTable('Name');
-    pt.create(['ID', 'Name', 'Creation Date', 'Include reasons', 'Exclude reasons'], amis.map(ami => [
+    pt.create(['ID', 'Name', 'Creation Date', 'Delete?', 'Include reasons', 'Exclude reasons'], amis.map(ami => [
       ami.id,
       ami.name,
       new Date(ami.creationDate).toISOString(),
+      (ami.included === true && ami.excluded === false) ? 'yes' : 'no',
       (ami.included === true) ? ami.includeReasons.join(', ') : '',
       (ami.excluded === true) ? ami.excludeReasons.join(', ') : ''
     ]));

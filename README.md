@@ -13,22 +13,22 @@ aws-amicleaner --include-name 'amiprefix-*' --exclude-newest 3 --exclude-days 5 
 A typical confirmation screen:
 
 ```
-+-------------+----------------------+--------------------------+-----------------+-------------------------+
-| ID          | Name                 | Creation Date            | Include reasons | Exclude reasons         | 
-+-------------+----------------------+--------------------------+-----------------+-------------------------+
-| ami-0a...72 | amiprefix-1685107232 | 2023-05-27T13:32:21.000Z | name match      | days not passed, newest | 
-| ami-02...3f | amiprefix-1685103569 | 2023-05-27T12:30:50.000Z | name match      | days not passed, newest | 
-| ami-09...d5 | amiprefix-1685095689 | 2023-05-27T10:19:59.000Z | name match      | days not passed, newest | 
-| ami-0f...c7 | amiprefix-1685039741 | 2023-05-26T18:47:37.000Z | name match      | days not passed         | 
-| ami-0f...f0 | amiprefix-1685018189 | 2023-05-26T12:49:02.000Z | name match      | days not passed         | 
-| ami-06...a8 | amiprefix-1685015512 | 2023-05-26T12:04:39.000Z | name match      | days not passed         | 
-| ami-04...44 | amiprefix-1684998014 | 2023-05-25T07:14:42.000Z | name match      |                         | <<-- marked for deletion
-| ami-02...6e | amiprefix-1684954911 | 2023-05-24T19:15:37.000Z | name match      |                         | <<-- marked for deletion
-| ami-0e...da | amiprefix-1684952424 | 2023-05-24T18:32:06.000Z | name match      |                         | <<-- marked for deletion
-| ami-0b...54 | amiprefix-1684949922 | 2023-05-24T17:50:26.000Z | name match      |                         | <<-- marked for deletion
-| ami-0b...2c | amiprefix-1684937102 | 2023-05-24T14:17:53.000Z | name match      |                         | <<-- marked for deletion
-| ami-0e...aa | amiprefix-1684915092 | 2023-05-24T08:09:42.000Z | name match      |                         | <<-- marked for deletion
-+-------------+----------------------+--------------------------+-----------------+-------------------------+
++-------------+----------------------+--------------------------+---------+-----------------+-------------------------+
+| ID          | Name                 | Creation Date            | Delete? | Include reasons | Exclude reasons         | 
++-------------+----------------------+--------------------------+---------+-----------------+-------------------------+
+| ami-0a...72 | amiprefix-1685107232 | 2023-05-27T13:32:21.000Z | no      | name match      | days not passed, newest | 
+| ami-02...3f | amiprefix-1685103569 | 2023-05-27T12:30:50.000Z | no      | name match      | days not passed, newest | 
+| ami-09...d5 | amiprefix-1685095689 | 2023-05-27T10:19:59.000Z | no      | name match      | days not passed, newest | 
+| ami-0f...c7 | amiprefix-1685039741 | 2023-05-26T18:47:37.000Z | no      | name match      | days not passed         | 
+| ami-0f...f0 | amiprefix-1685018189 | 2023-05-26T12:49:02.000Z | no      | name match      | days not passed         | 
+| ami-06...a8 | amiprefix-1685015512 | 2023-05-26T12:04:39.000Z | no      | name match      | days not passed         | 
+| ami-04...44 | amiprefix-1684998014 | 2023-05-25T07:14:42.000Z | yes     | name match      |                         |
+| ami-02...6e | amiprefix-1684954911 | 2023-05-24T19:15:37.000Z | yes     | name match      |                         |
+| ami-0e...da | amiprefix-1684952424 | 2023-05-24T18:32:06.000Z | yes     | name match      |                         |
+| ami-0b...54 | amiprefix-1684949922 | 2023-05-24T17:50:26.000Z | yes     | name match      |                         |
+| ami-0b...2c | amiprefix-1684937102 | 2023-05-24T14:17:53.000Z | yes     | name match      |                         |
+| ami-0e...aa | amiprefix-1684915092 | 2023-05-24T08:09:42.000Z | yes     | name match      |                         |
++-------------+----------------------+--------------------------+---------+-----------------+-------------------------+
 
 Do you want to continue and remove 6 AMIs [y/N] ? : 
 ```

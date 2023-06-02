@@ -64,7 +64,7 @@ async function fetchInUseAMIIDs(ec2, autoscaling) {
 }
 exports.fetchInUseAMIIDs = fetchInUseAMIIDs;
 
-async function fetchAMIs(ec2, autoscaling, includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays) {
+async function fetchAMIs(now, ec2, autoscaling, includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays) {
   const params = {
     Owners: ['self']
   };
@@ -105,7 +105,7 @@ async function fetchAMIs(ec2, autoscaling, includeName, includeTagKey, includeTa
   }
 
   if (excludeDays > 0) {
-    const ts = Date.now()-(excludeDays*24*60*60*1000);
+    const ts = now-(excludeDays*24*60*60*1000);
     amis = amis.map(ami => {
       if (ami.creationDate > ts) {
         ami.excluded = true;

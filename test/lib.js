@@ -205,6 +205,7 @@ describe('lib', () => {
   });
   describe('fetchAMIs', () => {
     it('includeName', async () => {
+      const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = {
         describeImages: (params) => {
           assert.deepStrictEqual(params,  { Owners: ['self'] });
@@ -229,7 +230,7 @@ describe('lib', () => {
       };
       const autoscaling = {};
 
-      const amis = await fetchAMIs(ec2, autoscaling, 'he*', undefined, undefined, 0, false, 0);
+      const amis = await fetchAMIs(now, ec2, autoscaling, 'he*', undefined, undefined, 0, false, 0);
 
       assert.deepStrictEqual(amis, [{
         id: 'ami-1',
@@ -244,6 +245,7 @@ describe('lib', () => {
       }]);
     });
     it('includeTag', async () => {
+      const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = {
         describeImages: (params) => {
           assert.deepStrictEqual(params,  {
@@ -274,7 +276,7 @@ describe('lib', () => {
       };
       const autoscaling = {};
 
-      const amis = await fetchAMIs(ec2, autoscaling, undefined, 'CostCenter', 'world', 0, false, 0);
+      const amis = await fetchAMIs(now, ec2, autoscaling, undefined, 'CostCenter', 'world', 0, false, 0);
 
       assert.deepStrictEqual(amis, [{
         id: 'ami-2',
@@ -288,9 +290,223 @@ describe('lib', () => {
         includeReasons: ['tag match']
       }]);
     });
-    // FIXME excludeNewest
-    // FIXME excludeInUse
-    // FIXME excludeDays
+    it('excludeNewest', async () => {
+      const now = Date.parse('2023-05-29T12:00:00.000Z');
+      const ec2 = {
+        describeImages: (params) => {
+          assert.deepStrictEqual(params,  { Owners: ['self'] });
+          return {
+            promise: async () => ({
+              Images: [{
+                ImageId: 'ami-1',
+                Name: 'hello-1',
+                CreationDate: '2023-05-28T12:00:00.000Z',
+                Tags: [],
+                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
+              }, {
+                ImageId: 'ami-2',
+                Name: 'hello-2',
+                CreationDate: '2023-05-27T12:00:00.000Z',
+                Tags: [],
+                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
+              }, {
+                ImageId: 'ami-3',
+                Name: 'hello-3',
+                CreationDate: '2023-05-26T12:00:00.000Z',
+                Tags: [],
+                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
+              }]
+            })
+          };
+        }
+      };
+      const autoscaling = {};
+
+      const amis = await fetchAMIs(now, ec2, autoscaling, 'hello-*', undefined, undefined, 2, false, 0);
+
+      assert.deepStrictEqual(amis, [{
+        id: 'ami-1',
+        name: 'hello-1',
+        creationDate: Date.parse('2023-05-28T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-1'}],
+        excluded: true,
+        excludeReasons: ['newest'],
+        included: true,
+        includeReasons: ['name match']
+      }, {
+        id: 'ami-2',
+        name: 'hello-2',
+        creationDate: Date.parse('2023-05-27T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-2'}],
+        excluded: true,
+        excludeReasons: ['newest'],
+        included: true,
+        includeReasons: ['name match']
+      }, {
+        id: 'ami-3',
+        name: 'hello-3',
+        creationDate: Date.parse('2023-05-26T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-3'}],
+        excluded: false,
+        excludeReasons: [],
+        included: true,
+        includeReasons: ['name match']
+      }]);
+    });
+    it('excludeInUse', async () => {
+      const now = Date.parse('2023-05-29T12:00:00.000Z');
+      const ec2 = {
+        describeInstances: () => {
+          return {
+            promise: async () => ({
+              Reservations: [{
+                Instances: [{
+                  ImageId: 'ami-1'
+                }, {
+                  ImageId: 'ami-2'
+                }]
+              }]
+            })
+          };
+        },
+        describeImages: (params) => {
+          assert.deepStrictEqual(params,  { Owners: ['self'] });
+          return {
+            promise: async () => ({
+              Images: [{
+                ImageId: 'ami-1',
+                Name: 'hello-1',
+                CreationDate: '2023-05-28T12:00:00.000Z',
+                Tags: [],
+                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
+              }, {
+                ImageId: 'ami-2',
+                Name: 'hello-2',
+                CreationDate: '2023-05-27T12:00:00.000Z',
+                Tags: [],
+                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
+              }, {
+                ImageId: 'ami-3',
+                Name: 'hello-3',
+                CreationDate: '2023-05-26T12:00:00.000Z',
+                Tags: [],
+                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
+              }]
+            })
+          };
+        }
+      };
+      const autoscaling = {
+        describeAutoScalingGroups: () => {
+          return {
+            promise: async () => ({AutoScalingGroups: []})
+          };
+        }
+      };
+
+      const amis = await fetchAMIs(now, ec2, autoscaling, 'hello-*', undefined, undefined, 0, true, 0);
+
+      assert.deepStrictEqual(amis, [{
+        id: 'ami-1',
+        name: 'hello-1',
+        creationDate: Date.parse('2023-05-28T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-1'}],
+        excluded: true,
+        excludeReasons: ['in use'],
+        included: true,
+        includeReasons: ['name match']
+      }, {
+        id: 'ami-2',
+        name: 'hello-2',
+        creationDate: Date.parse('2023-05-27T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-2'}],
+        excluded: true,
+        excludeReasons: ['in use'],
+        included: true,
+        includeReasons: ['name match']
+      }, {
+        id: 'ami-3',
+        name: 'hello-3',
+        creationDate: Date.parse('2023-05-26T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-3'}],
+        excluded: false,
+        excludeReasons: [],
+        included: true,
+        includeReasons: ['name match']
+      }]);
+    });
+    it('excludeDays', async () => {
+      const now = Date.parse('2023-05-29T12:00:00.000Z');
+      const ec2 = {
+        describeImages: (params) => {
+          assert.deepStrictEqual(params,  { Owners: ['self'] });
+          return {
+            promise: async () => ({
+              Images: [{
+                ImageId: 'ami-1',
+                Name: 'hello-1',
+                CreationDate: '2023-05-28T12:00:00.000Z',
+                Tags: [],
+                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
+              }, {
+                ImageId: 'ami-2',
+                Name: 'hello-2',
+                CreationDate: '2023-05-27T12:00:00.000Z',
+                Tags: [],
+                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
+              }, {
+                ImageId: 'ami-3',
+                Name: 'hello-3',
+                CreationDate: '2023-05-26T12:00:00.000Z',
+                Tags: [],
+                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
+              }]
+            })
+          };
+        }
+      };
+      const autoscaling = {};
+
+      const amis = await fetchAMIs(now, ec2, autoscaling, 'hello-*', undefined, undefined, 0, false, 3);
+
+      assert.deepStrictEqual(amis, [{
+        id: 'ami-1',
+        name: 'hello-1',
+        creationDate: Date.parse('2023-05-28T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-1'}],
+        excluded: true,
+        excludeReasons: ['days not passed'],
+        included: true,
+        includeReasons: ['name match']
+      }, {
+        id: 'ami-2',
+        name: 'hello-2',
+        creationDate: Date.parse('2023-05-27T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-2'}],
+        excluded: true,
+        excludeReasons: ['days not passed'],
+        included: true,
+        includeReasons: ['name match']
+      }, {
+        id: 'ami-3',
+        name: 'hello-3',
+        creationDate: Date.parse('2023-05-26T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-3'}],
+        excluded: false,
+        excludeReasons: [],
+        included: true,
+        includeReasons: ['name match']
+      }]);
+    });
   });
   describe('deleteAMIs', () => {
     it('happy', async () => {
