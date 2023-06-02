@@ -12,20 +12,37 @@ describe('lib', () => {
         }
       };
       const autoscaling = {
-        describeAutoScalingGroups: () => {
-          return {
-            promise: async () => ({AutoScalingGroups: [{
-              LaunchConfigurationName: 'lc-1'
-            }, {
-              LaunchConfigurationName: 'lc-2'
-            }]})
-          };
+        describeAutoScalingGroups: (params) => {
+          if (params.NextToken === '123') {
+            return {
+              promise: async () => ({
+                AutoScalingGroups: [{
+                  LaunchConfigurationName: 'lc-3'
+                }]
+              })
+            };
+          } else if (params.NextToken === undefined) {
+            return {
+              promise: async () => ({
+                AutoScalingGroups: [{
+                  LaunchConfigurationName: 'lc-1'
+                }, {
+                  LaunchConfigurationName: 'lc-2'
+                }],
+                NextToken: '123'
+              })
+            };
+          } else {
+            assert.fail('unexpected NextToken');
+          }
         },
         describeLaunchConfigurations: (params) => {
-          assert.deepStrictEqual(params.LaunchConfigurationNames, ['lc-1', 'lc-2']);
+          assert.deepStrictEqual(params.LaunchConfigurationNames, ['lc-1', 'lc-2', 'lc-3']);
           return {
             promise: async () => ({LaunchConfigurations: [{
               ImageId: 'ami-1'
+            }, {
+              ImageId: 'ami-2'
             }, {
               ImageId: 'ami-2'
             }]})
@@ -156,18 +173,35 @@ describe('lib', () => {
     });
     it('EC2 instances', async () => {
       const ec2 = {
-        describeInstances: () => {
-          return {
-            promise: async () => ({
-              Reservations: [{
-                Instances: [{
-                  ImageId: 'ami-1'
-                }, {
-                  ImageId: 'ami-2'
+        describeInstances: (params) => {
+          if (params.NextToken === '123') {
+            return {
+              promise: async () => ({
+                Reservations: [{
+                  Instances: [{
+                    ImageId: 'ami-2'
+                  }]
                 }]
-              }]
-            })
-          };
+              })
+            };
+          } else if (params.NextToken === undefined) {
+            return {
+              promise: async () => ({
+                Reservations: [{
+                  Instances: [{
+                    ImageId: 'ami-1'
+                  }]
+                }, {
+                  Instances: [{
+                    ImageId: 'ami-1'
+                  }]
+                }],
+                NextToken: '123'
+              })
+            };
+          } else {
+            assert.fail('unexpected NextToken');
+          }
         }
       };
       const autoscaling = {
@@ -204,6 +238,83 @@ describe('lib', () => {
     });
   });
   describe('fetchAMIs', () => {
+    it('paging', async () => {
+      const now = Date.parse('2023-05-29T12:00:00.000Z');
+      const ec2 = {
+        describeImages: (params) => {
+          assert.deepStrictEqual(params.Owners, ['self']);
+          if (params.NextToken === '123') {
+            return {
+              promise: async () => ({
+                Images: [{
+                  ImageId: 'ami-3',
+                  Name: 'hello-3',
+                  CreationDate: '2023-05-26T12:00:00.000Z',
+                  Tags: [],
+                  BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
+                }]
+              })
+            };
+          } else if (params.NextToken === undefined) {
+            return {
+              promise: async () => ({
+                Images: [{
+                  ImageId: 'ami-1',
+                  Name: 'hello-1',
+                  CreationDate: '2023-05-28T12:00:00.000Z',
+                  Tags: [],
+                  BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
+                }, {
+                  ImageId: 'ami-2',
+                  Name: 'hello-2',
+                  CreationDate: '2023-05-27T12:00:00.000Z',
+                  Tags: [],
+                  BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
+                }],
+                NextToken: '123'
+              })
+            };
+          } else {
+            assert.fail('unexpected NextToken');
+          }
+        }
+      };
+      const autoscaling = {};
+
+      const amis = await fetchAMIs(now, ec2, autoscaling, 'hello-*', undefined, undefined, 2, false, 0);
+
+      assert.deepStrictEqual(amis, [{
+        id: 'ami-1',
+        name: 'hello-1',
+        creationDate: Date.parse('2023-05-28T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-1'}],
+        excluded: true,
+        excludeReasons: ['newest'],
+        included: true,
+        includeReasons: ['name match']
+      }, {
+        id: 'ami-2',
+        name: 'hello-2',
+        creationDate: Date.parse('2023-05-27T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-2'}],
+        excluded: true,
+        excludeReasons: ['newest'],
+        included: true,
+        includeReasons: ['name match']
+      }, {
+        id: 'ami-3',
+        name: 'hello-3',
+        creationDate: Date.parse('2023-05-26T12:00:00.000Z'),
+        tags: {},
+        blockDeviceMappings: [{snapshotId: 'snap-3'}],
+        excluded: false,
+        excludeReasons: [],
+        included: true,
+        includeReasons: ['name match']
+      }]);
+    });
     it('includeName', async () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = {
