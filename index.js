@@ -51,6 +51,7 @@ async function run({
   if (amis.length === 0) {
     return;
   }
+
   let del = false;
   if (forceDelete === true) {
     del = true;
