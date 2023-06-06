@@ -1,6 +1,6 @@
 {
   "name": "aws-amicleaner",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "To clean up your AWS AMIs: First, include AMIs by name or tag. Second, exclude AMIs in use, younger than N days, or the newest N images. Third, manually confirm the list of AMIs for deletion.",
   "main": "index.js",
   "bin": "index.js",
