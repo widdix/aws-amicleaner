@@ -47,21 +47,20 @@ async function run({
     return autoscaling[region];
   };
 
-  let amis = [];
-
   const regions = await fetchRegions(ec2Client('us-east-1'), rawRegions);
-  for (const region of regions) {
-    let regionalAMIs = await fetchAMIs(now, ec2Client(region), autoscalingClient(region), includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays);
-    regionalAMIs = regionalAMIs.map(ami => ({
-      region,
-      ...ami
-    }));
-    amis = [...amis, ...regionalAMIs];
-  }
+  const amisPerRegion = await Promise.all([...regions].map(region => 
+    fetchAMIs(now, ec2Client(region), autoscalingClient(region), includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays)
+      .then(amis => amis.map(ami => ({
+        region,
+        ...ami
+      })))
+  ));
+  let amis = amisPerRegion.flat();
 
   if (verbose === true) {
     const pt = new PrettyTable();
     pt.sortTable('Name');
+    pt.sortTable('Region');
     pt.create(['Region', 'ID', 'Name', 'Creation Date', 'Delete?', 'Include reasons', 'Exclude reasons'], amis.map(ami => [
       ami.region,
       ami.id,
