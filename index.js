@@ -88,6 +88,7 @@ async function run({
   }
 
   if (del === true) {
+    // TODO group by region, run all regions in parallel and limit concurrency within a region
     const limit = pLimit(5);
     await Promise.all(amis.map(ami => limit(() => deleteAMI(ec2Client(ami.region), ami))));
   } else {
