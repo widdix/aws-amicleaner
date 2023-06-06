@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/widdix/aws-amicleaner#readme",
   "dependencies": {
+    "argparse": "2.0.1",
     "aws-sdk": "2.1387.0",
     "p-limit": "3.1.0",
     "wildcard": "2.0.1"
