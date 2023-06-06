@@ -20,6 +20,27 @@ function mapAMI(raw) {
   };
 }
 
+async function fetchRegions(ec2, rawRegions) {
+  const regions = new Set();
+
+  if (rawRegions.length === 0) {
+    regions.add(undefined);
+  }
+
+  rawRegions.filter(region => !region.includes('*')).forEach(region => regions.add(region));
+
+  const rawRegionsWithWildcard = rawRegions.filter(region => region.includes('*'));
+  if (rawRegionsWithWildcard.length !== 0) {
+    const {Regions} = await ec2.describeRegions({}).promise();
+    rawRegionsWithWildcard.forEach(rawRegionWithWildcard => {
+      wildcard(rawRegionWithWildcard, Regions.map(r => r.RegionName)).forEach(region => regions.add(region));
+    });
+  }
+
+  return regions;
+}
+exports.fetchRegions = fetchRegions;
+
 async function fetchInUseAMIIDs(ec2, autoscaling) {
   const inUseAMIIDs = new Set();
 
@@ -179,9 +200,4 @@ async function deleteAMI(ec2, ami) {
     console.log(`snapshot ${blockDevice.snapshotId} of AMI ${ami.id} deleted`);
   }
 }
-
-async function deleteAMIs(ec2, amis) {
-  const limit = pLimit(5);
-  await Promise.all(amis.map(ami => limit(() => deleteAMI(ec2, ami))));
-}
-exports.deleteAMIs = deleteAMIs;
+exports.deleteAMI = deleteAMI;

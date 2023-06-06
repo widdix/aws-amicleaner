@@ -1,6 +1,7 @@
 const { createInterface } = require('node:readline');
 const { ArgumentParser, BooleanOptionalAction } = require('argparse');
-const {fetchAMIs, deleteAMIs} = require('./lib.js');
+const { fetchAMIs, deleteAMI, fetchRegions} = require('./lib.js');
+const pLimit = require('p-limit');
 
 const AWS = require('aws-sdk');
 const PrettyTable = require('./prettytable.js');
@@ -17,6 +18,7 @@ async function input(query) {
 }
 
 async function run({
+  regions: rawRegions,
   includeName,
   includeTagKey,
   includeTagValue,
@@ -27,15 +29,39 @@ async function run({
   verbose
 }) {
   const now = Date.now();
-  const ec2 = new AWS.EC2({apiVersion: '2016-11-15'});
-  const autoscaling = new AWS.AutoScaling({apiVersion: '2011-01-01'});
 
-  let amis = await fetchAMIs(now, ec2, autoscaling, includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays);
+  const ec2 = {};
+  const autoscaling = {};
+  const ec2Client = (region) => {
+    if (!(region in ec2)) {
+      ec2[region] = new AWS.EC2({apiVersion: '2016-11-15', region});
+    }
+    return ec2[region];
+  };
+  const autoscalingClient = (region) => {
+    if (!(region in autoscaling)) {
+      autoscaling[region] = new AWS.AutoScaling({apiVersion: '2011-01-01', region});
+    }
+    return autoscaling[region];
+  };
+
+  let amis = [];
+
+  const regions = await fetchRegions(ec2Client('us-east-1'), rawRegions);
+  for (const region of regions) {
+    let regionalAMIs = await fetchAMIs(now, ec2Client(region), autoscalingClient(region), includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays);
+    regionalAMIs = regionalAMIs.map(ami => ({
+      region,
+      ...ami
+    }));
+    amis = [...amis, ...regionalAMIs];
+  }
 
   if (verbose === true) {
     const pt = new PrettyTable();
     pt.sortTable('Name');
-    pt.create(['ID', 'Name', 'Creation Date', 'Delete?', 'Include reasons', 'Exclude reasons'], amis.map(ami => [
+    pt.create(['Region', 'ID', 'Name', 'Creation Date', 'Delete?', 'Include reasons', 'Exclude reasons'], amis.map(ami => [
+      ami.region,
       ami.id,
       ami.name,
       new Date(ami.creationDate).toISOString(),
@@ -61,7 +87,8 @@ async function run({
   }
 
   if (del === true) {
-    await deleteAMIs(ec2, amis);
+    const limit = pLimit(5);
+    await Promise.all(amis.map(ami => limit(() => deleteAMI(ec2Client(ami.region), ami))));
   } else {
     return;
   }
@@ -84,6 +111,7 @@ To disable the defaults, run:
 aws-amicleaner --include-name 'amiprefix-*' --exclude-newest 0 --exclude-days 0 --no-exclude-in-use --no-verbose
 `
   });
+  parser.add_argument('--region', {dest: 'regions',  type: 'string', action: 'append', default: [], help: 'The AWS region, e.g. us-east-1, arg can be used more than once, wildcard * supported'});
   parser.add_argument('--include-name', {dest: 'includeName', type: 'string', help: 'The name that must be present, wildcard * supported'});
   parser.add_argument('--include-tag-key', {dest: 'includeTagKey', type: 'string', help: 'The tag key that must be present'});
   parser.add_argument('--include-tag-value', {dest: 'includeTagValue', type: 'string', help: 'The tag value (for the tag key) that must be present, wildcard * supported'});

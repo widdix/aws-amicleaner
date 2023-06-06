@@ -1,7 +1,47 @@
 const assert = require('node:assert');
-const {fetchInUseAMIIDs, fetchAMIs, deleteAMIs} = require('../lib.js');
+const { fetchRegions, fetchInUseAMIIDs, fetchAMIs, deleteAMI } = require('../lib.js');
 
 describe('lib', () => {
+  describe('fetchRegions', () => {
+    it('no regions', async () => {
+      const ec2 = {};
+      const regions = await fetchRegions(ec2, []);
+      assert.strictEqual(regions.size, 1);
+      assert.strictEqual(regions.has(undefined), true);
+    });
+    it('exact name', async () => {
+      const ec2 = {};
+      const regions = await fetchRegions(ec2, ['eu-west-1']);
+      assert.strictEqual(regions.size, 1);
+      assert.strictEqual(regions.has('eu-west-1'), true);
+    });
+    it('wildcrard', async () => {
+      const ec2 = {
+        describeRegions: () => {
+          return {
+            promise: async () => ({
+              Regions: [{
+                RegionName: 'eu-west-1'
+              }, {
+                RegionName: 'eu-west-2'
+              }, {
+                RegionName: 'eu-west-3'
+              }, {
+                RegionName: 'us-east-1'
+              }, {
+                RegionName: 'us-east-2'
+              }]
+            })
+          };
+        }
+      };
+      const regions = await fetchRegions(ec2, ['eu-west-*']);
+      assert.strictEqual(regions.size, 3);
+      assert.strictEqual(regions.has('eu-west-1'), true);
+      assert.strictEqual(regions.has('eu-west-2'), true);
+      assert.strictEqual(regions.has('eu-west-3'), true);
+    });
+  });
   describe('fetchInUseAMIIDs', () => {
     it('ASGs with Launch Configuration', async () => {
       const ec2 = {
@@ -619,30 +659,24 @@ describe('lib', () => {
       }]);
     });
   });
-  describe('deleteAMIs', () => {
+  describe('deleteAMI', () => {
     it('happy', async () => {
       const ec2 = {
         deregisterImage: (params) => {
-          if (params.ImageId === 'ami-1' || params.ImageId === 'ami-2') {
-            return {
-              promise: async () => ({})
-            };
-          } else {
-            assert.fail('unexpected ImageId');
-          }
+          assert.deepStrictEqual(params,  { ImageId: 'ami-1' });
+          return {
+            promise: async () => ({})
+          };
         },
         deleteSnapshot: (params) => {
-          if (params.SnapshotId === 'snap-1' || params.SnapshotId === 'snap-2' || params.SnapshotId === 'snap-3') {
-            return {
-              promise: async () => ({})
-            };
-          } else {
-            assert.fail('unexpected SnapshotId');
-          }
+          assert.deepStrictEqual(params,  { SnapshotId: 'snap-1' });
+          return {
+            promise: async () => ({})
+          };
         }
       };
 
-      await deleteAMIs(ec2, [{id: 'ami-1', blockDeviceMappings: [{snapshotId: 'snap-1'}]}, {id: 'ami-1', blockDeviceMappings: [{snapshotId: 'snap-2'}, {snapshotId: 'snap-3'}]}]);
+      await deleteAMI(ec2, {id: 'ami-1', blockDeviceMappings: [{snapshotId: 'snap-1'}]});
     });
   });
 });
