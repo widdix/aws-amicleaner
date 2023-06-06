@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const { createInterface } = require('node:readline');
 const { ArgumentParser, BooleanOptionalAction } = require('argparse');
 const { fetchAMIs, deleteAMI, fetchRegions} = require('./lib.js');
