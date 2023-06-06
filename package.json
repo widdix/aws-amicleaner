@@ -1,0 +1,38 @@
+{
+  "name": "aws-amicleaner",
+  "version": "1.0.0",
+  "description": "To clean up your AWS AMIs: First, include AMIs by name or tag. Second, exclude AMIs in use, younger than N days, or the newest N images. Third, manually confirm the list of AMIs for deletion.",
+  "main": "index.js",
+  "scripts": {
+    "test": "eslint . && c8 mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/widdix/aws-amicleaner.git"
+  },
+  "author": "Michael Wittig <michael@widdix.de>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/widdix/aws-amicleaner/issues"
+  },
+  "homepage": "https://github.com/widdix/aws-amicleaner#readme",
+  "dependencies": {
+    "aws-sdk": "2.1387.0",
+    "p-limit": "3.1.0",
+    "wildcard": "2.0.1"
+  },
+  "devDependencies": {
+    "c8": "7.13.0",
+    "eslint": "8.41.0",
+    "mocha": "10.2.0"
+  },
+  "mocha": {
+    "timeout": 10000
+  },
+  "c8": {
+    "reporter": [
+      "text",
+      "html"
+    ]
+  }
+}
