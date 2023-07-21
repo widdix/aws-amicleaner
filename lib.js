@@ -12,7 +12,7 @@ function mapAMI(raw) {
       acc[key] = value;
       return acc;
     }, {}),
-    blockDeviceMappings: raw.BlockDeviceMappings.map(raw => ({snapshotId: raw.Ebs.SnapshotId})),
+    blockDeviceMappings: raw.BlockDeviceMappings.filter(raw => raw.Ebs).map(raw => ({snapshotId: raw.Ebs.SnapshotId})),
     excluded: false,
     excludeReasons: [],
     included: false,
