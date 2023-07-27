@@ -7,7 +7,7 @@ To clean up your AWS AMIs:
 
 To delete all AMIs in eu-west-1 where the name starts with amiprefix-, are older than 5 days, and not the newest 3 images, run:
 ```bash
-aws-amicleaner --region eu-west-1 --include-name 'amiprefix-*' --exclude-newest 3 --exclude-days 5 --exclude-in-use --verbose
+npx aws-amicleaner --region eu-west-1 --include-name 'amiprefix-*' --exclude-newest 3 --exclude-days 5 --exclude-in-use --verbose
 ```
 
 A typical confirmation screen:
@@ -35,17 +35,17 @@ Do you want to continue and remove 6 AMIs [y/N] ? :
 
 To delete all AMIs in eu-west-* (eu-west-1, eu-west-2, eu-west-3) tagged with CostCenter=X342-*-1111, are older than 7 days (default), are not the newest 5 images (default), and are not in use (default), run:
 ```bash
-aws-amicleaner --region 'eu-west-*' --include-tag-key CostCenter --include-tag-value 'X342-*-1111'
+npx aws-amicleaner --region 'eu-west-*' --include-tag-key CostCenter --include-tag-value 'X342-*-1111'
 ```
 
 Run the command without confirmation (useful in scripts):
 ```bash
-aws-amicleaner --region 'eu-west-*' --include-tag-key CostCenter --include-tag-value 'X342-*-1111' --force-delete
+npx aws-amicleaner --region 'eu-west-*' --include-tag-key CostCenter --include-tag-value 'X342-*-1111' --force-delete
 ```
 
 To disable the defaults, run:
 ```bash
-aws-amicleaner --include-name 'amiprefix-*' --exclude-newest 0 --exclude-days 0 --no-exclude-in-use --no-verbose
+npx aws-amicleaner --include-name 'amiprefix-*' --exclude-newest 0 --exclude-days 0 --no-exclude-in-use --no-verbose
 ```
 
 ## Arguments
