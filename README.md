@@ -3,6 +3,10 @@ To clean up your AWS AMIs:
 2. Exclude AMIs in use, younger than N days, or the newest N images.
 3. Manually confirm the list of AMIs for deletion.
 
+## Requirements
+
+Requires Node.js >= 18.
+
 ## Examples
 
 To delete all AMIs in eu-west-1 where the name starts with amiprefix-, are older than 5 days, and not the newest 3 images, run:
