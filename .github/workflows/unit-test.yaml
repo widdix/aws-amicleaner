@@ -8,11 +8,15 @@ defaults:
 jobs:
   build:
     runs-on: ['hyperenv', 'medium']
+    strategy:
+      matrix:
+        node: ['18', '20']
+    name: Node.js ${{ matrix.node }}
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: ${{ matrix.node }}
         cache: npm
     - run: |
         npm ci
