@@ -1,40 +1,41 @@
 import assert from 'node:assert';
+import {mockClient} from 'aws-sdk-client-mock';
 import {fetchRegions, fetchInUseAMIIDs, fetchAMIs, deleteAMI} from '../lib.js';
+import {EC2Client, DescribeRegionsCommand, DescribeInstancesCommand, DescribeLaunchTemplateVersionsCommand, DeregisterImageCommand, DeleteSnapshotCommand, DescribeImagesCommand} from '@aws-sdk/client-ec2';
+import {AutoScalingClient, DescribeAutoScalingGroupsCommand, DescribeLaunchConfigurationsCommand} from '@aws-sdk/client-auto-scaling';
 
 describe('lib', () => {
   describe('fetchRegions', () => {
     it('no regions', async () => {
-      const ec2 = {};
+      const ec2 = new EC2Client({});
+      mockClient(ec2);
       const regions = await fetchRegions(ec2, []);
       assert.strictEqual(regions.size, 1);
       assert.strictEqual(regions.has(undefined), true);
     });
     it('exact name', async () => {
-      const ec2 = {};
+      const ec2 = new EC2Client({});
+      mockClient(ec2);
       const regions = await fetchRegions(ec2, ['eu-west-1']);
       assert.strictEqual(regions.size, 1);
       assert.strictEqual(regions.has('eu-west-1'), true);
     });
     it('wildcrard', async () => {
-      const ec2 = {
-        describeRegions: () => {
-          return {
-            promise: async () => ({
-              Regions: [{
-                RegionName: 'eu-west-1'
-              }, {
-                RegionName: 'eu-west-2'
-              }, {
-                RegionName: 'eu-west-3'
-              }, {
-                RegionName: 'us-east-1'
-              }, {
-                RegionName: 'us-east-2'
-              }]
-            })
-          };
-        }
-      };
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      ec2Mock.on(DescribeRegionsCommand).resolvesOnce({
+        Regions: [{
+          RegionName: 'eu-west-1'
+        }, {
+          RegionName: 'eu-west-2'
+        }, {
+          RegionName: 'eu-west-3'
+        }, {
+          RegionName: 'us-east-1'
+        }, {
+          RegionName: 'us-east-2'
+        }]
+      });
       const regions = await fetchRegions(ec2, ['eu-west-*']);
       assert.strictEqual(regions.size, 3);
       assert.strictEqual(regions.has('eu-west-1'), true);
@@ -44,235 +45,208 @@ describe('lib', () => {
   });
   describe('fetchInUseAMIIDs', () => {
     it('ASGs with Launch Configuration', async () => {
-      const ec2 = {
-        describeInstances: () => {
-          return {
-            promise: async () => ({Reservations: []})
-          };
-        }
-      };
-      const autoscaling = {
-        describeAutoScalingGroups: (params) => {
-          if (params.NextToken === '123') {
-            return {
-              promise: async () => ({
-                AutoScalingGroups: [{
-                  LaunchConfigurationName: 'lc-3'
-                }]
-              })
-            };
-          } else if (params.NextToken === undefined) {
-            return {
-              promise: async () => ({
-                AutoScalingGroups: [{
-                  LaunchConfigurationName: 'lc-1'
-                }, {
-                  LaunchConfigurationName: 'lc-2'
-                }],
-                NextToken: '123'
-              })
-            };
-          } else {
-            assert.fail('unexpected NextToken');
-          }
-        },
-        describeLaunchConfigurations: (params) => {
-          assert.deepStrictEqual(params.LaunchConfigurationNames, ['lc-1', 'lc-2', 'lc-3']);
-          return {
-            promise: async () => ({LaunchConfigurations: [{
-              ImageId: 'ami-1'
-            }, {
-              ImageId: 'ami-2'
-            }, {
-              ImageId: 'ami-2'
-            }]})
-          };
-        }
-      };
-
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      const autoscaling = new AutoScalingClient({});
+      const autoscalingMock = mockClient(autoscaling);
+      ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
+        Reservations: []
+      });
+      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
+        AutoScalingGroups: [{
+          LaunchConfigurationName: 'lc-1'
+        }, {
+          LaunchConfigurationName: 'lc-2'
+        }],
+        NextToken: '123'
+      });
+      autoscalingMock.on(DescribeAutoScalingGroupsCommand, {
+        NextToken: '123'
+      }).resolvesOnce({
+        AutoScalingGroups: [{
+          LaunchConfigurationName: 'lc-3'
+        }]
+      });
+      autoscalingMock.on(DescribeLaunchConfigurationsCommand).resolvesOnce({
+        LaunchConfigurations: [{
+          ImageId: 'ami-1'
+        }, {
+          ImageId: 'ami-2'
+        }, {
+          ImageId: 'ami-2'
+        }]
+      });
       const inUseAMIIDs = await fetchInUseAMIIDs(ec2, autoscaling);
       assert.strictEqual(inUseAMIIDs.size, 2);
       assert.strictEqual(inUseAMIIDs.has('ami-1'), true);
       assert.strictEqual(inUseAMIIDs.has('ami-2'), true);
     });
     it('ASGs with Launch Template', async () => {
-      const ec2 = {
-        describeInstances: () => {
-          return {
-            promise: async () => ({Reservations: []})
-          };
-        },
-        describeLaunchTemplateVersions: (params) => {
-          if (params.LaunchTemplateId === 'lt-1') {
-            assert.deepStrictEqual(params.Versions, ['001']);
-            return {
-              promise: async () => ({LaunchTemplateVersions: [{
-                LaunchTemplateData: {
-                  ImageId: 'ami-1'
-                }
-              }]})
-            };
-          } else if (params.LaunchTemplateId === 'lt-2') {
-            assert.deepStrictEqual(params.Versions, ['002']);
-            return {
-              promise: async () => ({LaunchTemplateVersions: [{
-                LaunchTemplateData: {
-                  ImageId: 'ami-2'
-                }
-              }]})
-            };
-          } else {
-            assert.fail('unexpected LaunchTemplateId');
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      const autoscaling = new AutoScalingClient({});
+      const autoscalingMock = mockClient(autoscaling);
+      ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
+        Reservations: []
+      });
+      ec2Mock.on(DescribeLaunchTemplateVersionsCommand, {
+        LaunchTemplateId: 'lt-1',
+        Versions: ['001']
+      }).resolvesOnce({
+        LaunchTemplateVersions: [{
+          LaunchTemplateData: {
+            ImageId: 'ami-1'
           }
-        }
-      };
-      const autoscaling = {
-        describeAutoScalingGroups: () => {
-          return {
-            promise: async () => ({AutoScalingGroups: [{
-              LaunchTemplate: {
-                LaunchTemplateId: 'lt-1',
-                Version: '001'
-              }
-            }, {
-              LaunchTemplate: {
-                LaunchTemplateId: 'lt-2',
-                Version: '002'
-              }
-            }]})
-          };
-        }
-      };
-
+        }]
+      });
+      ec2Mock.on(DescribeLaunchTemplateVersionsCommand, {
+        LaunchTemplateId: 'lt-2',
+        Versions: ['002']
+      }).resolvesOnce({
+        LaunchTemplateVersions: [{
+          LaunchTemplateData: {
+            ImageId: 'ami-2'
+          }
+        }]
+      });
+      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
+        AutoScalingGroups: [{
+          LaunchTemplate: {
+            LaunchTemplateId: 'lt-1',
+            Version: '001'
+          }
+        }, {
+          LaunchTemplate: {
+            LaunchTemplateId: 'lt-2',
+            Version: '002'
+          }
+        }]
+      });
       const inUseAMIIDs = await fetchInUseAMIIDs(ec2, autoscaling);
       assert.strictEqual(inUseAMIIDs.size, 2);
       assert.strictEqual(inUseAMIIDs.has('ami-1'), true);
       assert.strictEqual(inUseAMIIDs.has('ami-2'), true);
     });
     it('ASGs with Mixed Instances Policy', async () => {
-      const ec2 = {
-        describeInstances: () => {
-          return {
-            promise: async () => ({Reservations: []})
-          };
-        },
-        describeLaunchTemplateVersions: (params) => {
-          if (params.LaunchTemplateId === 'lt-1') {
-            assert.deepStrictEqual(params.Versions, ['001']);
-            return {
-              promise: async () => ({LaunchTemplateVersions: [{
-                LaunchTemplateData: {
-                  ImageId: 'ami-1'
-                }
-              }]})
-            };
-          } else if (params.LaunchTemplateId === 'lt-2') {
-            assert.deepStrictEqual(params.Versions, ['002']);
-            return {
-              promise: async () => ({LaunchTemplateVersions: [{
-                LaunchTemplateData: {
-                  ImageId: 'ami-2'
-                }
-              }]})
-            };
-          } else {
-            assert.fail('unexpected LaunchTemplateId');
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      const autoscaling = new AutoScalingClient({});
+      const autoscalingMock = mockClient(autoscaling);
+      ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
+        Reservations: []
+      });
+      ec2Mock.on(DescribeLaunchTemplateVersionsCommand, {
+        LaunchTemplateId: 'lt-1',
+        Versions: ['001']
+      }).resolvesOnce({
+        LaunchTemplateVersions: [{
+          LaunchTemplateData: {
+            ImageId: 'ami-1'
           }
-        }
-      };
-      const autoscaling = {
-        describeAutoScalingGroups: () => {
-          return {
-            promise: async () => ({AutoScalingGroups: [{
-              MixedInstancesPolicy: {
-                LaunchTemplate: {
-                  LaunchTemplateSpecification: {
-                    LaunchTemplateId: 'lt-1',
-                    Version: '001'
-                  }
-                }
+        }]
+      });
+      ec2Mock.on(DescribeLaunchTemplateVersionsCommand, {
+        LaunchTemplateId: 'lt-2',
+        Versions: ['002']
+      }).resolvesOnce({
+        LaunchTemplateVersions: [{
+          LaunchTemplateData: {
+            ImageId: 'ami-2'
+          }
+        }]
+      });
+      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
+        AutoScalingGroups: [{
+          MixedInstancesPolicy: {
+            LaunchTemplate: {
+              LaunchTemplateSpecification: {
+                LaunchTemplateId: 'lt-1',
+                Version: '001'
               }
-            }, {
-              MixedInstancesPolicy: {
-                LaunchTemplate: {
-                  LaunchTemplateSpecification: {
-                    LaunchTemplateId: 'lt-2',
-                    Version: '002'
-                  }
-                }
+            }
+          }
+        }, {
+          MixedInstancesPolicy: {
+            LaunchTemplate: {
+              LaunchTemplateSpecification: {
+                LaunchTemplateId: 'lt-2',
+                Version: '002'
               }
-            }]})
-          };
-        }
-      };
-
+            }
+          }
+        }]
+      });
       const inUseAMIIDs = await fetchInUseAMIIDs(ec2, autoscaling);
       assert.strictEqual(inUseAMIIDs.size, 2);
       assert.strictEqual(inUseAMIIDs.has('ami-1'), true);
       assert.strictEqual(inUseAMIIDs.has('ami-2'), true);
     });
     it('EC2 instances', async () => {
-      const ec2 = {
-        describeInstances: (params) => {
-          if (params.NextToken === '123') {
-            return {
-              promise: async () => ({
-                Reservations: [{
-                  Instances: [{
-                    ImageId: 'ami-2'
-                  }]
-                }]
-              })
-            };
-          } else if (params.NextToken === undefined) {
-            return {
-              promise: async () => ({
-                Reservations: [{
-                  Instances: [{
-                    ImageId: 'ami-1'
-                  }]
-                }, {
-                  Instances: [{
-                    ImageId: 'ami-1'
-                  }]
-                }],
-                NextToken: '123'
-              })
-            };
-          } else {
-            assert.fail('unexpected NextToken');
-          }
-        }
-      };
-      const autoscaling = {
-        describeAutoScalingGroups: () => {
-          return {
-            promise: async () => ({AutoScalingGroups: []})
-          };
-        }
-      };
-
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      const autoscaling = new AutoScalingClient({});
+      const autoscalingMock = mockClient(autoscaling);
+      ec2Mock.on(DescribeInstancesCommand, {
+        Filters: [{
+          Name: 'instance-state-name',
+          Values: [
+            'pending',
+            'running',
+            'shutting-down',
+            'stopping',
+            'stopped'
+          ]
+        }]
+      }).resolvesOnce({
+        Reservations: [{
+          Instances: [{
+            ImageId: 'ami-1'
+          }]
+        }, {
+          Instances: [{
+            ImageId: 'ami-1'
+          }]
+        }],
+        NextToken: '123'
+      });
+      ec2Mock.on(DescribeInstancesCommand, {
+        Filters: [{
+          Name: 'instance-state-name',
+          Values: [
+            'pending',
+            'running',
+            'shutting-down',
+            'stopping',
+            'stopped'
+          ]
+        }],
+        NextToken: '123'
+      }).resolvesOnce({
+        Reservations: [{
+          Instances: [{
+            ImageId: 'ami-2'
+          }]
+        }]
+      });
+      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
+        AutoScalingGroups: []
+      });
       const inUseAMIIDs = await fetchInUseAMIIDs(ec2, autoscaling);
       assert.strictEqual(inUseAMIIDs.size, 2);
       assert.strictEqual(inUseAMIIDs.has('ami-1'), true);
       assert.strictEqual(inUseAMIIDs.has('ami-2'), true);
     });
     it('no ASGs, no instances', async () => {
-      const ec2 = {
-        describeInstances: () => {
-          return {
-            promise: async () => ({Reservations: []})
-          };
-        }
-      };
-      const autoscaling = {
-        describeAutoScalingGroups: () => {
-          return {
-            promise: async () => ({AutoScalingGroups: []})
-          };
-        }
-      };
-
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      const autoscaling = new AutoScalingClient({});
+      const autoscalingMock = mockClient(autoscaling);
+      ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
+        Reservations: []
+      });
+      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
+        AutoScalingGroups: []
+      });
       const inUseAMIIDs = await fetchInUseAMIIDs(ec2, autoscaling);
       assert.strictEqual(inUseAMIIDs.size, 0);
     });
@@ -280,49 +254,36 @@ describe('lib', () => {
   describe('fetchAMIs', () => {
     it('paging', async () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
-      const ec2 = {
-        describeImages: (params) => {
-          assert.deepStrictEqual(params.Owners, ['self']);
-          if (params.NextToken === '123') {
-            return {
-              promise: async () => ({
-                Images: [{
-                  ImageId: 'ami-3',
-                  Name: 'hello-3',
-                  CreationDate: '2023-05-26T12:00:00.000Z',
-                  Tags: [],
-                  BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
-                }]
-              })
-            };
-          } else if (params.NextToken === undefined) {
-            return {
-              promise: async () => ({
-                Images: [{
-                  ImageId: 'ami-1',
-                  Name: 'hello-1',
-                  CreationDate: '2023-05-28T12:00:00.000Z',
-                  Tags: [],
-                  BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
-                }, {
-                  ImageId: 'ami-2',
-                  Name: 'hello-2',
-                  CreationDate: '2023-05-27T12:00:00.000Z',
-                  Tags: [],
-                  BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
-                }],
-                NextToken: '123'
-              })
-            };
-          } else {
-            assert.fail('unexpected NextToken');
-          }
-        }
-      };
-      const autoscaling = {};
-
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      const autoscaling = new AutoScalingClient({});
+      mockClient(autoscaling);
+      ec2Mock.on(DescribeImagesCommand).resolvesOnce({
+        Images: [{
+          ImageId: 'ami-1',
+          Name: 'hello-1',
+          CreationDate: '2023-05-28T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
+        }, {
+          ImageId: 'ami-2',
+          Name: 'hello-2',
+          CreationDate: '2023-05-27T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
+        }],
+        NextToken: '123'
+      });
+      ec2Mock.on(DescribeImagesCommand, {NextToken: '123'}).resolvesOnce({
+        Images: [{
+          ImageId: 'ami-3',
+          Name: 'hello-3',
+          CreationDate: '2023-05-26T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
+        }]
+      });
       const amis = await fetchAMIs(now, ec2, autoscaling, 'hello-*', undefined, undefined, 2, false, 0);
-
       assert.deepStrictEqual(amis, [{
         id: 'ami-1',
         name: 'hello-1',
@@ -357,32 +318,28 @@ describe('lib', () => {
     });
     it('includeName', async () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
-      const ec2 = {
-        describeImages: (params) => {
-          assert.deepStrictEqual(params,  {Owners: ['self']});
-          return {
-            promise: async () => ({
-              Images: [{
-                ImageId: 'ami-1',
-                Name: 'hello',
-                CreationDate: '2023-05-28T12:00:00.000Z',
-                Tags: [],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
-              }, {
-                ImageId: 'ami-2',
-                Name: 'world',
-                CreationDate: '2023-05-27T12:00:00.000Z',
-                Tags: [],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}, {Ebs: {SnapshotId: 'snap-3'}}]
-              }]
-            })
-          };
-        }
-      };
-      const autoscaling = {};
-
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      const autoscaling = new AutoScalingClient({});
+      mockClient(autoscaling);
+      ec2Mock.on(DescribeImagesCommand, {
+        Owners: ['self']
+      }).resolvesOnce({
+        Images: [{
+          ImageId: 'ami-1',
+          Name: 'hello',
+          CreationDate: '2023-05-28T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
+        }, {
+          ImageId: 'ami-2',
+          Name: 'world',
+          CreationDate: '2023-05-27T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}, {Ebs: {SnapshotId: 'snap-3'}}]
+        }]
+      });
       const amis = await fetchAMIs(now, ec2, autoscaling, 'he*', undefined, undefined, 0, false, 0);
-
       assert.deepStrictEqual(amis, [{
         id: 'ami-1',
         name: 'hello',
@@ -397,38 +354,32 @@ describe('lib', () => {
     });
     it('includeTag', async () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
-      const ec2 = {
-        describeImages: (params) => {
-          assert.deepStrictEqual(params,  {
-            Filters: [{
-              Name: 'tag-key',
-              Values: ['CostCenter']
-            }],
-            Owners: ['self']
-          });
-          return {
-            promise: async () => ({
-              Images: [{
-                ImageId: 'ami-1',
-                Name: 'ami-1',
-                CreationDate: '2023-05-28T12:00:00.000Z',
-                Tags: [{Key: 'CostCenter', Value: 'hello'}],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
-              }, {
-                ImageId: 'ami-2',
-                Name: 'ami-2',
-                CreationDate: '2023-05-27T12:00:00.000Z',
-                Tags: [{Key: 'CostCenter', Value: 'world'}],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}, {Ebs: {SnapshotId: 'snap-3'}}]
-              }]
-            })
-          };
-        }
-      };
-      const autoscaling = {};
-
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      const autoscaling = new AutoScalingClient({});
+      mockClient(autoscaling);
+      ec2Mock.on(DescribeImagesCommand, {
+        Filters: [{
+          Name: 'tag-key',
+          Values: ['CostCenter']
+        }],
+        Owners: ['self']
+      }).resolvesOnce({
+        Images: [{
+          ImageId: 'ami-1',
+          Name: 'ami-1',
+          CreationDate: '2023-05-28T12:00:00.000Z',
+          Tags: [{Key: 'CostCenter', Value: 'hello'}],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
+        }, {
+          ImageId: 'ami-2',
+          Name: 'ami-2',
+          CreationDate: '2023-05-27T12:00:00.000Z',
+          Tags: [{Key: 'CostCenter', Value: 'world'}],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}, {Ebs: {SnapshotId: 'snap-3'}}]
+        }]
+      });
       const amis = await fetchAMIs(now, ec2, autoscaling, undefined, 'CostCenter', 'world', 0, false, 0);
-
       assert.deepStrictEqual(amis, [{
         id: 'ami-2',
         name: 'ami-2',
@@ -443,38 +394,34 @@ describe('lib', () => {
     });
     it('excludeNewest', async () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
-      const ec2 = {
-        describeImages: (params) => {
-          assert.deepStrictEqual(params,  {Owners: ['self']});
-          return {
-            promise: async () => ({
-              Images: [{
-                ImageId: 'ami-1',
-                Name: 'hello-1',
-                CreationDate: '2023-05-28T12:00:00.000Z',
-                Tags: [],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
-              }, {
-                ImageId: 'ami-2',
-                Name: 'hello-2',
-                CreationDate: '2023-05-27T12:00:00.000Z',
-                Tags: [],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
-              }, {
-                ImageId: 'ami-3',
-                Name: 'hello-3',
-                CreationDate: '2023-05-26T12:00:00.000Z',
-                Tags: [],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
-              }]
-            })
-          };
-        }
-      };
-      const autoscaling = {};
-
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      const autoscaling = new AutoScalingClient({});
+      mockClient(autoscaling);
+      ec2Mock.on(DescribeImagesCommand, {
+        Owners: ['self']
+      }).resolvesOnce({
+        Images: [{
+          ImageId: 'ami-1',
+          Name: 'hello-1',
+          CreationDate: '2023-05-28T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
+        }, {
+          ImageId: 'ami-2',
+          Name: 'hello-2',
+          CreationDate: '2023-05-27T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
+        }, {
+          ImageId: 'ami-3',
+          Name: 'hello-3',
+          CreationDate: '2023-05-26T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
+        }]
+      });
       const amis = await fetchAMIs(now, ec2, autoscaling, 'hello-*', undefined, undefined, 2, false, 0);
-
       assert.deepStrictEqual(amis, [{
         id: 'ami-1',
         name: 'hello-1',
@@ -509,57 +456,46 @@ describe('lib', () => {
     });
     it('excludeInUse', async () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
-      const ec2 = {
-        describeInstances: () => {
-          return {
-            promise: async () => ({
-              Reservations: [{
-                Instances: [{
-                  ImageId: 'ami-1'
-                }, {
-                  ImageId: 'ami-2'
-                }]
-              }]
-            })
-          };
-        },
-        describeImages: (params) => {
-          assert.deepStrictEqual(params,  {Owners: ['self']});
-          return {
-            promise: async () => ({
-              Images: [{
-                ImageId: 'ami-1',
-                Name: 'hello-1',
-                CreationDate: '2023-05-28T12:00:00.000Z',
-                Tags: [],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
-              }, {
-                ImageId: 'ami-2',
-                Name: 'hello-2',
-                CreationDate: '2023-05-27T12:00:00.000Z',
-                Tags: [],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
-              }, {
-                ImageId: 'ami-3',
-                Name: 'hello-3',
-                CreationDate: '2023-05-26T12:00:00.000Z',
-                Tags: [],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
-              }]
-            })
-          };
-        }
-      };
-      const autoscaling = {
-        describeAutoScalingGroups: () => {
-          return {
-            promise: async () => ({AutoScalingGroups: []})
-          };
-        }
-      };
-
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      const autoscaling = new AutoScalingClient({});
+      const autoscalingMock = mockClient(autoscaling);
+      ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
+        Reservations: [{
+          Instances: [{
+            ImageId: 'ami-1'
+          }, {
+            ImageId: 'ami-2'
+          }]
+        }]
+      });
+      ec2Mock.on(DescribeImagesCommand, {
+        Owners: ['self']
+      }).resolvesOnce({
+        Images: [{
+          ImageId: 'ami-1',
+          Name: 'hello-1',
+          CreationDate: '2023-05-28T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
+        }, {
+          ImageId: 'ami-2',
+          Name: 'hello-2',
+          CreationDate: '2023-05-27T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
+        }, {
+          ImageId: 'ami-3',
+          Name: 'hello-3',
+          CreationDate: '2023-05-26T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
+        }]
+      });
+      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
+        AutoScalingGroups: []
+      });
       const amis = await fetchAMIs(now, ec2, autoscaling, 'hello-*', undefined, undefined, 0, true, 0);
-
       assert.deepStrictEqual(amis, [{
         id: 'ami-1',
         name: 'hello-1',
@@ -594,38 +530,34 @@ describe('lib', () => {
     });
     it('excludeDays', async () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
-      const ec2 = {
-        describeImages: (params) => {
-          assert.deepStrictEqual(params,  {Owners: ['self']});
-          return {
-            promise: async () => ({
-              Images: [{
-                ImageId: 'ami-1',
-                Name: 'hello-1',
-                CreationDate: '2023-05-28T12:00:00.000Z',
-                Tags: [],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
-              }, {
-                ImageId: 'ami-2',
-                Name: 'hello-2',
-                CreationDate: '2023-05-27T12:00:00.000Z',
-                Tags: [],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
-              }, {
-                ImageId: 'ami-3',
-                Name: 'hello-3',
-                CreationDate: '2023-05-26T12:00:00.000Z',
-                Tags: [],
-                BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
-              }]
-            })
-          };
-        }
-      };
-      const autoscaling = {};
-
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      const autoscaling = new AutoScalingClient({});
+      mockClient(autoscaling);
+      ec2Mock.on(DescribeImagesCommand, {
+        Owners: ['self']
+      }).resolvesOnce({
+        Images: [{
+          ImageId: 'ami-1',
+          Name: 'hello-1',
+          CreationDate: '2023-05-28T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-1'}}]
+        }, {
+          ImageId: 'ami-2',
+          Name: 'hello-2',
+          CreationDate: '2023-05-27T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-2'}}]
+        }, {
+          ImageId: 'ami-3',
+          Name: 'hello-3',
+          CreationDate: '2023-05-26T12:00:00.000Z',
+          Tags: [],
+          BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
+        }]
+      });
       const amis = await fetchAMIs(now, ec2, autoscaling, 'hello-*', undefined, undefined, 0, false, 3);
-
       assert.deepStrictEqual(amis, [{
         id: 'ami-1',
         name: 'hello-1',
@@ -661,21 +593,14 @@ describe('lib', () => {
   });
   describe('deleteAMI', () => {
     it('happy', async () => {
-      const ec2 = {
-        deregisterImage: (params) => {
-          assert.deepStrictEqual(params,  {ImageId: 'ami-1'});
-          return {
-            promise: async () => ({})
-          };
-        },
-        deleteSnapshot: (params) => {
-          assert.deepStrictEqual(params,  {SnapshotId: 'snap-1'});
-          return {
-            promise: async () => ({})
-          };
-        }
-      };
-
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      ec2Mock.on(DeregisterImageCommand, {
+        ImageId: 'ami-1'
+      }).resolvesOnce({});
+      ec2Mock.on(DeleteSnapshotCommand, {
+        SnapshotId: 'snap-1'
+      }).resolvesOnce({});
       await deleteAMI(ec2, {id: 'ami-1', blockDeviceMappings: [{snapshotId: 'snap-1'}]});
     });
   });

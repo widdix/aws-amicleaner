@@ -68,7 +68,7 @@ npx aws-amicleaner --include-name 'amiprefix-*' --exclude-newest 0 --exclude-day
 --exclude-days EXCLUDEDAYS
                       Exclude AMIs from deletion that are younger than N days
 --exclude-in-use, --no-exclude-in-use
-                      Exclude AMIs from deletion that are in use by EC2 instances, ASGs, Launch Configurations, and Launch Templates (default: true)
+                      Exclude AMIs from deletion that are in use by EC2 instances, Launch Configurations, and Launch Templates (default: true)
 -f, --force-delete, --no-force-delete
                       Skip confirmation before deletion (default: false)
 --verbose, --no-verbose

@@ -4,8 +4,8 @@ import {createInterface} from 'node:readline';
 import {ArgumentParser, BooleanOptionalAction} from 'argparse';
 import {fetchAMIs, deleteAMI, fetchRegions} from './lib.js';
 import pLimit from 'p-limit';
-
-import AWS from 'aws-sdk';
+import {AutoScalingClient} from '@aws-sdk/client-auto-scaling';
+import {EC2Client} from '@aws-sdk/client-ec2';
 import PrettyTable from './prettytable.js';
 
 const rl = createInterface({
@@ -36,13 +36,13 @@ async function run({
   const autoscaling = {};
   const ec2Client = (region) => {
     if (!(region in ec2)) {
-      ec2[region] = new AWS.EC2({apiVersion: '2016-11-15', region});
+      ec2[region] = new EC2Client({apiVersion: '2016-11-15', region});
     }
     return ec2[region];
   };
   const autoscalingClient = (region) => {
     if (!(region in autoscaling)) {
-      autoscaling[region] = new AWS.AutoScaling({apiVersion: '2011-01-01', region});
+      autoscaling[region] = new AutoScalingClient({apiVersion: '2011-01-01', region});
     }
     return autoscaling[region];
   };

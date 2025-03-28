@@ -1,5 +1,7 @@
 import wildcard from 'wildcard';
 import pLimit from 'p-limit';
+import {DescribeAutoScalingGroupsCommand, DescribeLaunchConfigurationsCommand} from '@aws-sdk/client-auto-scaling';
+import {DescribeRegionsCommand, paginateDescribeInstances, DescribeLaunchTemplateVersionsCommand, paginateDescribeImages, DeregisterImageCommand, DeleteSnapshotCommand} from '@aws-sdk/client-ec2';
 
 const MAX_ITEMS_PER_LAUNCH_CONFIGURATION_PAGE = 50;
 
@@ -31,7 +33,7 @@ export async function fetchRegions(ec2, rawRegions) {
 
   const rawRegionsWithWildcard = rawRegions.filter(region => region.includes('*'));
   if (rawRegionsWithWildcard.length !== 0) {
-    const {Regions} = await ec2.describeRegions({}).promise();
+    const {Regions} = await ec2.send(new DescribeRegionsCommand({}));
     rawRegionsWithWildcard.forEach(rawRegionWithWildcard => {
       wildcard(rawRegionWithWildcard, Regions.map(r => r.RegionName)).forEach(region => regions.add(region));
     });
@@ -43,36 +45,33 @@ export async function fetchRegions(ec2, rawRegions) {
 export async function fetchInUseAMIIDs(ec2, autoscaling) {
   const inUseAMIIDs = new Set();
 
-  for await (const reservation of (async function*() {
-    let nextToken = '';
-    while (nextToken !== undefined) {
-      const {Reservations: reservations, NextToken} = await ec2.describeInstances({
-        NextToken: (nextToken === '') ? undefined : nextToken,
-        Filters: [{
-          Name: 'instance-state-name',
-          Values: [
-            'pending',
-            'running',
-            'shutting-down',
-            'stopping',
-            'stopped'
-          ]
-        }]
-      }).promise();
-      yield* reservations;
-      nextToken = NextToken;
+  const paginator = paginateDescribeInstances({
+    client: ec2
+  }, {
+    Filters: [{
+      Name: 'instance-state-name',
+      Values: [
+        'pending',
+        'running',
+        'shutting-down',
+        'stopping',
+        'stopped'
+      ]
+    }]
+  });
+  for await (const page of paginator) {
+    for (const reservation of page.Reservations) {
+      reservation.Instances.forEach(instance => inUseAMIIDs.add(instance.ImageId));
     }
-  })()) {
-    reservation.Instances.forEach(instance => inUseAMIIDs.add(instance.ImageId));
   }
 
   const asgs = [];
   for await (const asg of (async function*() {
     let nextToken = '';
     while (nextToken !== undefined) {
-      const {AutoScalingGroups, NextToken} = await autoscaling.describeAutoScalingGroups({
+      const {AutoScalingGroups, NextToken} = await autoscaling.send(new DescribeAutoScalingGroupsCommand({
         NextToken: (nextToken === '') ? undefined : nextToken
-      }).promise();
+      }));
       yield* AutoScalingGroups;
       nextToken = NextToken;
     }
@@ -84,9 +83,9 @@ export async function fetchInUseAMIIDs(ec2, autoscaling) {
   const inUseLCNames = asgs.filter(asg => 'LaunchConfigurationName' in asg).map(asg => asg.LaunchConfigurationName);
   if (inUseLCNames.length > 0) {
     for (let i = 0; i < Math.ceil(inUseLCNames.length/MAX_ITEMS_PER_LAUNCH_CONFIGURATION_PAGE); i++) {
-      const {LaunchConfigurations: lcs} = await autoscaling.describeLaunchConfigurations({
+      const {LaunchConfigurations: lcs} = await autoscaling.send(new DescribeLaunchConfigurationsCommand({
         LaunchConfigurationNames: inUseLCNames.slice(i*MAX_ITEMS_PER_LAUNCH_CONFIGURATION_PAGE, (i+1)*MAX_ITEMS_PER_LAUNCH_CONFIGURATION_PAGE)
-      }).promise();
+      }));
       lcs.forEach(lc => inUseAMIIDs.add(lc.ImageId));
     }
   }
@@ -98,10 +97,10 @@ export async function fetchInUseAMIIDs(ec2, autoscaling) {
   const limit = pLimit(5);
   await Promise.all(
     inUseLTs.map(({id, version}) => limit(() => 
-      ec2.describeLaunchTemplateVersions({
+      ec2.send(new DescribeLaunchTemplateVersionsCommand({
         LaunchTemplateId: id,
         Versions: [version]
-      }).promise().then(data => data.LaunchTemplateVersions[0].LaunchTemplateData.ImageId))
+      })).then(data => data.LaunchTemplateVersions[0].LaunchTemplateData.ImageId))
     )
   ).then(amiIDs => amiIDs.forEach(amiID => inUseAMIIDs.add(amiID)));
 
@@ -110,27 +109,20 @@ export async function fetchInUseAMIIDs(ec2, autoscaling) {
 
 export async function fetchAMIs(now, ec2, autoscaling, includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays) {
   let amis = [];
-  for await (const rawAMI of (async function*() {
-    let nextToken = '';
-    while (nextToken !== undefined) {
-      const params = {
-        Owners: ['self']
-      };
-      if (includeTagKey !== undefined) {
-        params.Filters = [{
-          Name: 'tag-key',
-          Values: [includeTagKey]
-        }];
-      }
-      if (nextToken !== '') {
-        params.NextToken = nextToken;
-      }
-      const {Images, NextToken} = await ec2.describeImages(params).promise();
-      yield* Images;
-      nextToken = NextToken;
-    }
-  })()) {
-    amis.push(mapAMI(rawAMI));
+  const input = {
+    Owners: ['self']
+  };
+  if (includeTagKey !== undefined) {
+    input.Filters = [{
+      Name: 'tag-key',
+      Values: [includeTagKey]
+    }];
+  }
+  const paginator = paginateDescribeImages({
+    client: ec2
+  }, input);
+  for await (const page of paginator) {
+    page.Images.forEach(rawAMI => amis.push(mapAMI(rawAMI)));
   }
 
   if (includeName !== undefined) {
@@ -186,14 +178,14 @@ export async function fetchAMIs(now, ec2, autoscaling, includeName, includeTagKe
 }
 
 export async function deleteAMI(ec2, ami) {
-  await ec2.deregisterImage({
+  await ec2.send(new DeregisterImageCommand({
     ImageId: ami.id
-  }).promise();
+  }));
   console.log(`AMI ${ami.id} deregistered`);
   for (const blockDevice of ami.blockDeviceMappings) {
-    await ec2.deleteSnapshot({
+    await ec2.send(new DeleteSnapshotCommand({
       SnapshotId: blockDevice.snapshotId
-    }).promise();
+    }));
     console.log(`snapshot ${blockDevice.snapshotId} of AMI ${ami.id} deleted`);
   }
 }
