@@ -1,5 +1,5 @@
-const assert = require('node:assert');
-const { fetchRegions, fetchInUseAMIIDs, fetchAMIs, deleteAMI } = require('../lib.js');
+import assert from 'node:assert';
+import {fetchRegions, fetchInUseAMIIDs, fetchAMIs, deleteAMI} from '../lib.js';
 
 describe('lib', () => {
   describe('fetchRegions', () => {
@@ -359,7 +359,7 @@ describe('lib', () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = {
         describeImages: (params) => {
-          assert.deepStrictEqual(params,  { Owners: ['self'] });
+          assert.deepStrictEqual(params,  {Owners: ['self']});
           return {
             promise: async () => ({
               Images: [{
@@ -445,7 +445,7 @@ describe('lib', () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = {
         describeImages: (params) => {
-          assert.deepStrictEqual(params,  { Owners: ['self'] });
+          assert.deepStrictEqual(params,  {Owners: ['self']});
           return {
             promise: async () => ({
               Images: [{
@@ -524,7 +524,7 @@ describe('lib', () => {
           };
         },
         describeImages: (params) => {
-          assert.deepStrictEqual(params,  { Owners: ['self'] });
+          assert.deepStrictEqual(params,  {Owners: ['self']});
           return {
             promise: async () => ({
               Images: [{
@@ -596,7 +596,7 @@ describe('lib', () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = {
         describeImages: (params) => {
-          assert.deepStrictEqual(params,  { Owners: ['self'] });
+          assert.deepStrictEqual(params,  {Owners: ['self']});
           return {
             promise: async () => ({
               Images: [{
@@ -663,13 +663,13 @@ describe('lib', () => {
     it('happy', async () => {
       const ec2 = {
         deregisterImage: (params) => {
-          assert.deepStrictEqual(params,  { ImageId: 'ami-1' });
+          assert.deepStrictEqual(params,  {ImageId: 'ami-1'});
           return {
             promise: async () => ({})
           };
         },
         deleteSnapshot: (params) => {
-          assert.deepStrictEqual(params,  { SnapshotId: 'snap-1' });
+          assert.deepStrictEqual(params,  {SnapshotId: 'snap-1'});
           return {
             promise: async () => ({})
           };

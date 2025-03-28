@@ -1,5 +1,5 @@
-const wildcard = require('wildcard');
-const pLimit = require('p-limit');
+import wildcard from 'wildcard';
+import pLimit from 'p-limit';
 
 const MAX_ITEMS_PER_LAUNCH_CONFIGURATION_PAGE = 50;
 
@@ -20,7 +20,7 @@ function mapAMI(raw) {
   };
 }
 
-async function fetchRegions(ec2, rawRegions) {
+export async function fetchRegions(ec2, rawRegions) {
   const regions = new Set();
 
   if (rawRegions.length === 0) {
@@ -39,9 +39,8 @@ async function fetchRegions(ec2, rawRegions) {
 
   return regions;
 }
-exports.fetchRegions = fetchRegions;
 
-async function fetchInUseAMIIDs(ec2, autoscaling) {
+export async function fetchInUseAMIIDs(ec2, autoscaling) {
   const inUseAMIIDs = new Set();
 
   for await (const reservation of (async function*() {
@@ -108,9 +107,8 @@ async function fetchInUseAMIIDs(ec2, autoscaling) {
 
   return inUseAMIIDs;
 }
-exports.fetchInUseAMIIDs = fetchInUseAMIIDs;
 
-async function fetchAMIs(now, ec2, autoscaling, includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays) {
+export async function fetchAMIs(now, ec2, autoscaling, includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays) {
   let amis = [];
   for await (const rawAMI of (async function*() {
     let nextToken = '';
@@ -186,9 +184,8 @@ async function fetchAMIs(now, ec2, autoscaling, includeName, includeTagKey, incl
 
   return amis;
 }
-exports.fetchAMIs = fetchAMIs;
 
-async function deleteAMI(ec2, ami) {
+export async function deleteAMI(ec2, ami) {
   await ec2.deregisterImage({
     ImageId: ami.id
   }).promise();
@@ -200,4 +197,3 @@ async function deleteAMI(ec2, ami) {
     console.log(`snapshot ${blockDevice.snapshotId} of AMI ${ami.id} deleted`);
   }
 }
-exports.deleteAMI = deleteAMI;

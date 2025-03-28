@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
-const { createInterface } = require('node:readline');
-const { ArgumentParser, BooleanOptionalAction } = require('argparse');
-const { fetchAMIs, deleteAMI, fetchRegions} = require('./lib.js');
-const pLimit = require('p-limit');
+import {createInterface} from 'node:readline';
+import {ArgumentParser, BooleanOptionalAction} from 'argparse';
+import {fetchAMIs, deleteAMI, fetchRegions} from './lib.js';
+import pLimit from 'p-limit';
 
-const AWS = require('aws-sdk');
-const PrettyTable = require('./prettytable.js');
+import AWS from 'aws-sdk';
+import PrettyTable from './prettytable.js';
 
 const rl = createInterface({
   input: process.stdin,
@@ -119,7 +119,7 @@ aws-amicleaner --include-name 'amiprefix-*' --exclude-newest 0 --exclude-days 0 
   parser.add_argument('--include-tag-value', {dest: 'includeTagValue', type: 'string', help: 'The tag value (for the tag key) that must be present, wildcard * supported'});
   parser.add_argument('--exclude-newest', {dest: 'excludeNewest', type: 'int', default: 5, help: 'Exclude the newest N AMIs'});
   parser.add_argument('--exclude-days', {dest: 'excludeDays', type: 'int', default: 7, help: 'Exclude AMIs from deletion that are younger than N days'});
-  parser.add_argument('--exclude-in-use', {dest: 'excludeInUse', default: true, action: BooleanOptionalAction, help: 'Exclude AMIs from deletion that are in use by EC2 instances, ASGs, Launch Configurations, and Launch Templates'});
+  parser.add_argument('--exclude-in-use', {dest: 'excludeInUse', default: true, action: BooleanOptionalAction, help: 'Exclude AMIs from deletion that are in use by EC2 instances, Launch Configurations, and Launch Templates'});
   parser.add_argument('-f', '--force-delete', {dest: 'forceDelete', default: false, action: BooleanOptionalAction, help: 'Skip confirmation before deletion'});
   parser.add_argument('--verbose', {dest: 'verbose', default: true, action: BooleanOptionalAction, help: 'Display additional information'});
   const args = parser.parse_args();

@@ -10,7 +10,7 @@ jobs:
     runs-on: ['hyperenv', 'medium-eu-west-1']
     strategy:
       matrix:
-        node: ['18', '20']
+        node: ['18', '20', '22']
     name: Node.js ${{ matrix.node }}
     steps:
     - uses: actions/checkout@v4

@@ -37,7 +37,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-var PrettyTable = function () {
+export default function PrettyTable() {
   // Skeleton structure of table with list of column names, row and max width of each column element
   this.table = {
     'columnNames': [],
@@ -237,5 +237,3 @@ PrettyTable.prototype.deleteTable = function () {
     'maxWidth': []
   };
 };
-
-module.exports = PrettyTable;
