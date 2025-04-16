@@ -8,10 +8,10 @@ function mapAMI(raw) {
     id: raw.ImageId,
     name: raw.Name,
     creationDate: Date.parse(raw.CreationDate),
-    tags: raw.Tags.reduce((acc, {Key: key, Value: value}) => {
+    tags: Array.isArray(raw.Tags) ? raw.Tags.reduce((acc, {Key: key, Value: value}) => {
       acc[key] = value;
       return acc;
-    }, {}),
+    }, {}) : {},
     blockDeviceMappings: raw.BlockDeviceMappings.filter(raw => raw.Ebs).map(raw => ({snapshotId: raw.Ebs.SnapshotId})),
     excluded: false,
     excludeReasons: [],
