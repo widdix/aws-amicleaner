@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import {mockClient} from 'aws-sdk-client-mock';
 import {fetchRegions, fetchInUseAMIIDs, fetchAMIs, deleteAMI} from '../lib.js';
-import {EC2Client, DescribeRegionsCommand, DescribeInstancesCommand, DescribeLaunchTemplateVersionsCommand, DeregisterImageCommand, DeleteSnapshotCommand, DescribeImagesCommand} from '@aws-sdk/client-ec2';
-import {AutoScalingClient, DescribeAutoScalingGroupsCommand, DescribeLaunchConfigurationsCommand} from '@aws-sdk/client-auto-scaling';
+import {EC2Client, DescribeRegionsCommand, DescribeInstancesCommand, DescribeLaunchTemplatesCommand, DescribeLaunchTemplateVersionsCommand, DeregisterImageCommand, DeleteSnapshotCommand, DescribeImagesCommand} from '@aws-sdk/client-ec2';
+import {AutoScalingClient, DescribeLaunchConfigurationsCommand} from '@aws-sdk/client-auto-scaling';
 
 describe('lib', () => {
   describe('fetchRegions', () => {
@@ -44,28 +44,13 @@ describe('lib', () => {
     });
   });
   describe('fetchInUseAMIIDs', () => {
-    it('ASGs with Launch Configuration', async () => {
+    it('Launch Configuration', async () => {
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
       const autoscaling = new AutoScalingClient({});
       const autoscalingMock = mockClient(autoscaling);
       ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
         Reservations: []
-      });
-      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
-        AutoScalingGroups: [{
-          LaunchConfigurationName: 'lc-1'
-        }, {
-          LaunchConfigurationName: 'lc-2'
-        }],
-        NextToken: '123'
-      });
-      autoscalingMock.on(DescribeAutoScalingGroupsCommand, {
-        NextToken: '123'
-      }).resolvesOnce({
-        AutoScalingGroups: [{
-          LaunchConfigurationName: 'lc-3'
-        }]
       });
       autoscalingMock.on(DescribeLaunchConfigurationsCommand).resolvesOnce({
         LaunchConfigurations: [{
@@ -76,18 +61,33 @@ describe('lib', () => {
           ImageId: 'ami-2'
         }]
       });
+      ec2Mock.on(DescribeLaunchTemplatesCommand).resolvesOnce({
+        LaunchTemplates: []
+      });
       const inUseAMIIDs = await fetchInUseAMIIDs(ec2, autoscaling);
       assert.strictEqual(inUseAMIIDs.size, 2);
       assert.strictEqual(inUseAMIIDs.has('ami-1'), true);
       assert.strictEqual(inUseAMIIDs.has('ami-2'), true);
     });
-    it('ASGs with Launch Template', async () => {
+    it('Launch Template', async () => {
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
       const autoscaling = new AutoScalingClient({});
       const autoscalingMock = mockClient(autoscaling);
       ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
         Reservations: []
+      });
+      autoscalingMock.on(DescribeLaunchConfigurationsCommand).resolvesOnce({
+        LaunchConfigurations: []
+      });
+      ec2Mock.on(DescribeLaunchTemplatesCommand).resolvesOnce({
+        LaunchTemplates: [{
+          LaunchTemplateId: 'lt-1',
+          DefaultVersionNumber: '001'
+        }, {
+          LaunchTemplateId: 'lt-2',
+          DefaultVersionNumber: '002'
+        }]
       });
       ec2Mock.on(DescribeLaunchTemplateVersionsCommand, {
         LaunchTemplateId: 'lt-1',
@@ -106,73 +106,6 @@ describe('lib', () => {
         LaunchTemplateVersions: [{
           LaunchTemplateData: {
             ImageId: 'ami-2'
-          }
-        }]
-      });
-      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
-        AutoScalingGroups: [{
-          LaunchTemplate: {
-            LaunchTemplateId: 'lt-1',
-            Version: '001'
-          }
-        }, {
-          LaunchTemplate: {
-            LaunchTemplateId: 'lt-2',
-            Version: '002'
-          }
-        }]
-      });
-      const inUseAMIIDs = await fetchInUseAMIIDs(ec2, autoscaling);
-      assert.strictEqual(inUseAMIIDs.size, 2);
-      assert.strictEqual(inUseAMIIDs.has('ami-1'), true);
-      assert.strictEqual(inUseAMIIDs.has('ami-2'), true);
-    });
-    it('ASGs with Mixed Instances Policy', async () => {
-      const ec2 = new EC2Client({});
-      const ec2Mock = mockClient(ec2);
-      const autoscaling = new AutoScalingClient({});
-      const autoscalingMock = mockClient(autoscaling);
-      ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
-        Reservations: []
-      });
-      ec2Mock.on(DescribeLaunchTemplateVersionsCommand, {
-        LaunchTemplateId: 'lt-1',
-        Versions: ['001']
-      }).resolvesOnce({
-        LaunchTemplateVersions: [{
-          LaunchTemplateData: {
-            ImageId: 'ami-1'
-          }
-        }]
-      });
-      ec2Mock.on(DescribeLaunchTemplateVersionsCommand, {
-        LaunchTemplateId: 'lt-2',
-        Versions: ['002']
-      }).resolvesOnce({
-        LaunchTemplateVersions: [{
-          LaunchTemplateData: {
-            ImageId: 'ami-2'
-          }
-        }]
-      });
-      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
-        AutoScalingGroups: [{
-          MixedInstancesPolicy: {
-            LaunchTemplate: {
-              LaunchTemplateSpecification: {
-                LaunchTemplateId: 'lt-1',
-                Version: '001'
-              }
-            }
-          }
-        }, {
-          MixedInstancesPolicy: {
-            LaunchTemplate: {
-              LaunchTemplateSpecification: {
-                LaunchTemplateId: 'lt-2',
-                Version: '002'
-              }
-            }
           }
         }]
       });
@@ -228,8 +161,11 @@ describe('lib', () => {
           }]
         }]
       });
-      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
-        AutoScalingGroups: []
+      autoscalingMock.on(DescribeLaunchConfigurationsCommand).resolvesOnce({
+        LaunchConfigurations: []
+      });
+      ec2Mock.on(DescribeLaunchTemplatesCommand).resolvesOnce({
+        LaunchTemplates: []
       });
       const inUseAMIIDs = await fetchInUseAMIIDs(ec2, autoscaling);
       assert.strictEqual(inUseAMIIDs.size, 2);
@@ -244,8 +180,11 @@ describe('lib', () => {
       ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
         Reservations: []
       });
-      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
-        AutoScalingGroups: []
+      autoscalingMock.on(DescribeLaunchConfigurationsCommand).resolvesOnce({
+        LaunchConfigurations: []
+      });
+      ec2Mock.on(DescribeLaunchTemplatesCommand).resolvesOnce({
+        LaunchTemplates: []
       });
       const inUseAMIIDs = await fetchInUseAMIIDs(ec2, autoscaling);
       assert.strictEqual(inUseAMIIDs.size, 0);
@@ -469,6 +408,12 @@ describe('lib', () => {
           }]
         }]
       });
+      autoscalingMock.on(DescribeLaunchConfigurationsCommand).resolvesOnce({
+        LaunchConfigurations: []
+      });
+      ec2Mock.on(DescribeLaunchTemplatesCommand).resolvesOnce({
+        LaunchTemplates: []
+      });
       ec2Mock.on(DescribeImagesCommand, {
         Owners: ['self']
       }).resolvesOnce({
@@ -491,9 +436,6 @@ describe('lib', () => {
           Tags: [],
           BlockDeviceMappings: [{Ebs: {SnapshotId: 'snap-3'}}]
         }]
-      });
-      autoscalingMock.on(DescribeAutoScalingGroupsCommand).resolvesOnce({
-        AutoScalingGroups: []
       });
       const amis = await fetchAMIs(now, ec2, autoscaling, 'hello-*', undefined, undefined, 0, true, 0);
       assert.deepStrictEqual(amis, [{

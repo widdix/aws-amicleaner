@@ -1,19 +1,17 @@
 import wildcard from 'wildcard';
 import pLimit from 'p-limit';
-import {DescribeAutoScalingGroupsCommand, DescribeLaunchConfigurationsCommand} from '@aws-sdk/client-auto-scaling';
-import {DescribeRegionsCommand, paginateDescribeInstances, DescribeLaunchTemplateVersionsCommand, paginateDescribeImages, DeregisterImageCommand, DeleteSnapshotCommand} from '@aws-sdk/client-ec2';
-
-const MAX_ITEMS_PER_LAUNCH_CONFIGURATION_PAGE = 50;
+import {paginateDescribeLaunchConfigurations} from '@aws-sdk/client-auto-scaling';
+import {DescribeRegionsCommand, paginateDescribeInstances, DescribeLaunchTemplateVersionsCommand, paginateDescribeImages, DeregisterImageCommand, DeleteSnapshotCommand, paginateDescribeLaunchTemplates} from '@aws-sdk/client-ec2';
 
 function mapAMI(raw) {
   return {
     id: raw.ImageId,
     name: raw.Name,
     creationDate: Date.parse(raw.CreationDate),
-    tags: raw.Tags.reduce((acc, {Key: key, Value: value}) => {
+    tags: Array.isArray(raw.Tags) ? raw.Tags.reduce((acc, {Key: key, Value: value}) => {
       acc[key] = value;
       return acc;
-    }, {}),
+    }, {}) : {},
     blockDeviceMappings: raw.BlockDeviceMappings.filter(raw => raw.Ebs).map(raw => ({snapshotId: raw.Ebs.SnapshotId})),
     excluded: false,
     excludeReasons: [],
@@ -45,7 +43,7 @@ export async function fetchRegions(ec2, rawRegions) {
 export async function fetchInUseAMIIDs(ec2, autoscaling) {
   const inUseAMIIDs = new Set();
 
-  const paginator = paginateDescribeInstances({
+  const instancePaginator = paginateDescribeInstances({
     client: ec2
   }, {
     Filters: [{
@@ -59,50 +57,30 @@ export async function fetchInUseAMIIDs(ec2, autoscaling) {
       ]
     }]
   });
-  for await (const page of paginator) {
+  for await (const page of instancePaginator) {
     for (const reservation of page.Reservations) {
       reservation.Instances.forEach(instance => inUseAMIIDs.add(instance.ImageId));
     }
   }
 
-  const asgs = [];
-  for await (const asg of (async function*() {
-    let nextToken = '';
-    while (nextToken !== undefined) {
-      const {AutoScalingGroups, NextToken} = await autoscaling.send(new DescribeAutoScalingGroupsCommand({
-        NextToken: (nextToken === '') ? undefined : nextToken
-      }));
-      yield* AutoScalingGroups;
-      nextToken = NextToken;
-    }
-  })()) {
-    asgs.push(asg);
+  const lcPaginator = paginateDescribeLaunchConfigurations({client: autoscaling}, {});
+  for await (const page of lcPaginator) {
+    page.LaunchConfigurations.forEach(lc => inUseAMIIDs.add(lc.ImageId));
   }
 
-  // in use by ASG -> Launch Configuration
-  const inUseLCNames = asgs.filter(asg => 'LaunchConfigurationName' in asg).map(asg => asg.LaunchConfigurationName);
-  if (inUseLCNames.length > 0) {
-    for (let i = 0; i < Math.ceil(inUseLCNames.length/MAX_ITEMS_PER_LAUNCH_CONFIGURATION_PAGE); i++) {
-      const {LaunchConfigurations: lcs} = await autoscaling.send(new DescribeLaunchConfigurationsCommand({
-        LaunchConfigurationNames: inUseLCNames.slice(i*MAX_ITEMS_PER_LAUNCH_CONFIGURATION_PAGE, (i+1)*MAX_ITEMS_PER_LAUNCH_CONFIGURATION_PAGE)
-      }));
-      lcs.forEach(lc => inUseAMIIDs.add(lc.ImageId));
-    }
+  const ltPaginator = paginateDescribeLaunchTemplates({client: ec2}, {});
+  const ltLimit = pLimit(5);
+  for await (const page of ltPaginator) {
+    await Promise.all(
+      page.LaunchTemplates.map(({LaunchTemplateId: id, DefaultVersionNumber: version}) => ltLimit(async () => { 
+        const data = await ec2.send(new DescribeLaunchTemplateVersionsCommand({
+          LaunchTemplateId: id,
+          Versions: [version]
+        }));
+        inUseAMIIDs.add(data.LaunchTemplateVersions[0].LaunchTemplateData.ImageId);
+      }))
+    );
   }
-
-  const inUseLTs = [
-    ...asgs.filter(asg => 'LaunchTemplate' in asg).map(asg => ({id: asg.LaunchTemplate.LaunchTemplateId, version: asg.LaunchTemplate.Version})),
-    ...asgs.filter(asg => 'MixedInstancesPolicy' in asg).map(asg => ({id: asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification.LaunchTemplateId, version: asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification.Version}))
-  ];
-  const limit = pLimit(5);
-  await Promise.all(
-    inUseLTs.map(({id, version}) => limit(() => 
-      ec2.send(new DescribeLaunchTemplateVersionsCommand({
-        LaunchTemplateId: id,
-        Versions: [version]
-      })).then(data => data.LaunchTemplateVersions[0].LaunchTemplateData.ImageId))
-    )
-  ).then(amiIDs => amiIDs.forEach(amiID => inUseAMIIDs.add(amiID)));
 
   return inUseAMIIDs;
 }
