@@ -72,7 +72,17 @@ export async function fetchInUseAMIIDs(ec2, autoscaling) {
   const ltLimit = pLimit(5);
   for await (const page of ltPaginator) {
     await Promise.all(
-      page.LaunchTemplates.map(({LaunchTemplateId: id, DefaultVersionNumber: version}) => ltLimit(async () => { 
+      page.LaunchTemplates.map(({LaunchTemplateId: id, DefaultVersionNumber: version}) => ltLimit(async () => {
+        const data = await ec2.send(new DescribeLaunchTemplateVersionsCommand({
+          LaunchTemplateId: id,
+          Versions: [version]
+        }));
+        inUseAMIIDs.add(data.LaunchTemplateVersions[0].LaunchTemplateData.ImageId);
+      }))
+    );
+    // CloudFormation does not update the default version of a launch template, therefore we are also considering the latest version as being used
+    await Promise.all(
+      page.LaunchTemplates.map(({LaunchTemplateId: id, LatestVersionNumber: version}) => ltLimit(async () => { 
         const data = await ec2.send(new DescribeLaunchTemplateVersionsCommand({
           LaunchTemplateId: id,
           Versions: [version]
