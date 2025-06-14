@@ -83,10 +83,13 @@ describe('lib', () => {
       ec2Mock.on(DescribeLaunchTemplatesCommand).resolvesOnce({
         LaunchTemplates: [{
           LaunchTemplateId: 'lt-1',
-          DefaultVersionNumber: '001'
+          DefaultVersionNumber: '001',
+          LatestVersionNumber: '002'
+
         }, {
           LaunchTemplateId: 'lt-2',
-          DefaultVersionNumber: '002'
+          DefaultVersionNumber: '003',
+          LatestVersionNumber: '003'
         }]
       });
       ec2Mock.on(DescribeLaunchTemplateVersionsCommand, {
@@ -100,7 +103,7 @@ describe('lib', () => {
         }]
       });
       ec2Mock.on(DescribeLaunchTemplateVersionsCommand, {
-        LaunchTemplateId: 'lt-2',
+        LaunchTemplateId: 'lt-1',
         Versions: ['002']
       }).resolvesOnce({
         LaunchTemplateVersions: [{
@@ -109,10 +112,21 @@ describe('lib', () => {
           }
         }]
       });
+      ec2Mock.on(DescribeLaunchTemplateVersionsCommand, {
+        LaunchTemplateId: 'lt-2',
+        Versions: ['003']
+      }).resolves({
+        LaunchTemplateVersions: [{
+          LaunchTemplateData: {
+            ImageId: 'ami-3'
+          }
+        }]
+      });
       const inUseAMIIDs = await fetchInUseAMIIDs(ec2, autoscaling);
-      assert.strictEqual(inUseAMIIDs.size, 2);
+      assert.strictEqual(inUseAMIIDs.size, 3);
       assert.strictEqual(inUseAMIIDs.has('ami-1'), true);
       assert.strictEqual(inUseAMIIDs.has('ami-2'), true);
+      assert.strictEqual(inUseAMIIDs.has('ami-3'), true);
     });
     it('EC2 instances', async () => {
       const ec2 = new EC2Client({});
