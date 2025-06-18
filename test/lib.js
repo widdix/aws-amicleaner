@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import {mockClient} from 'aws-sdk-client-mock';
 import {fetchRegions, fetchInUseAMIIDs, fetchAMIs, deleteAMI} from '../lib.js';
-import {EC2Client, DescribeRegionsCommand, DescribeInstancesCommand, DescribeLaunchTemplatesCommand, DescribeLaunchTemplateVersionsCommand, DeregisterImageCommand, DeleteSnapshotCommand, DescribeImagesCommand} from '@aws-sdk/client-ec2';
+import {EC2Client, DescribeRegionsCommand, DescribeInstancesCommand, DescribeLaunchTemplatesCommand, DescribeLaunchTemplateVersionsCommand, DeregisterImageCommand, DescribeImagesCommand} from '@aws-sdk/client-ec2';
 import {AutoScalingClient, DescribeLaunchConfigurationsCommand} from '@aws-sdk/client-auto-scaling';
 
 describe('lib', () => {
@@ -552,12 +552,10 @@ describe('lib', () => {
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
       ec2Mock.on(DeregisterImageCommand, {
-        ImageId: 'ami-1'
+        ImageId: 'ami-1',
+        DeleteAssociatedSnapshots: true
       }).resolvesOnce({});
-      ec2Mock.on(DeleteSnapshotCommand, {
-        SnapshotId: 'snap-1'
-      }).resolvesOnce({});
-      await deleteAMI(ec2, {id: 'ami-1', blockDeviceMappings: [{snapshotId: 'snap-1'}]});
+      await deleteAMI(ec2, {id: 'ami-1'});
     });
   });
 });
