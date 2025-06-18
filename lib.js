@@ -1,7 +1,7 @@
 import wildcard from 'wildcard';
 import pLimit from 'p-limit';
 import {paginateDescribeLaunchConfigurations} from '@aws-sdk/client-auto-scaling';
-import {DescribeRegionsCommand, paginateDescribeInstances, DescribeLaunchTemplateVersionsCommand, paginateDescribeImages, DeregisterImageCommand, DeleteSnapshotCommand, paginateDescribeLaunchTemplates} from '@aws-sdk/client-ec2';
+import {DescribeRegionsCommand, paginateDescribeInstances, DescribeLaunchTemplateVersionsCommand, paginateDescribeImages, DeregisterImageCommand, paginateDescribeLaunchTemplates} from '@aws-sdk/client-ec2';
 
 function mapAMI(raw) {
   return {
@@ -167,13 +167,8 @@ export async function fetchAMIs(now, ec2, autoscaling, includeName, includeTagKe
 
 export async function deleteAMI(ec2, ami) {
   await ec2.send(new DeregisterImageCommand({
-    ImageId: ami.id
+    ImageId: ami.id,
+    DeleteAssociatedSnapshots: true
   }));
-  console.log(`AMI ${ami.id} deregistered`);
-  for (const blockDevice of ami.blockDeviceMappings) {
-    await ec2.send(new DeleteSnapshotCommand({
-      SnapshotId: blockDevice.snapshotId
-    }));
-    console.log(`snapshot ${blockDevice.snapshotId} of AMI ${ami.id} deleted`);
-  }
+  console.log(`AMI ${ami.id} deregistered and deleted`);
 }
