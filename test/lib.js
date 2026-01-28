@@ -8,14 +8,17 @@ describe('lib', () => {
   describe('fetchRegions', () => {
     it('no regions', async () => {
       const ec2 = new EC2Client({});
-      mockClient(ec2);
+      const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const regions = await fetchRegions(ec2, []);
       assert.strictEqual(regions.size, 1);
       assert.strictEqual(regions.has(undefined), true);
     });
     it('exact name', async () => {
       const ec2 = new EC2Client({});
-      mockClient(ec2);
+      
+      const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const regions = await fetchRegions(ec2, ['eu-west-1']);
       assert.strictEqual(regions.size, 1);
       assert.strictEqual(regions.has('eu-west-1'), true);
@@ -23,6 +26,7 @@ describe('lib', () => {
     it('wildcrard', async () => {
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       ec2Mock.on(DescribeRegionsCommand).resolvesOnce({
         Regions: [{
           RegionName: 'eu-west-1'
@@ -47,8 +51,10 @@ describe('lib', () => {
     it('Launch Configuration', async () => {
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const autoscaling = new AutoScalingClient({});
       const autoscalingMock = mockClient(autoscaling);
+      autoscalingMock.rejects(new Error('not mocked'));
       ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
         Reservations: []
       });
@@ -72,8 +78,10 @@ describe('lib', () => {
     it('Launch Template', async () => {
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const autoscaling = new AutoScalingClient({});
       const autoscalingMock = mockClient(autoscaling);
+      autoscalingMock.rejects(new Error('not mocked'));
       ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
         Reservations: []
       });
@@ -131,8 +139,10 @@ describe('lib', () => {
     it('EC2 instances', async () => {
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const autoscaling = new AutoScalingClient({});
       const autoscalingMock = mockClient(autoscaling);
+      autoscalingMock.rejects(new Error('not mocked'));
       ec2Mock.on(DescribeInstancesCommand, {
         Filters: [{
           Name: 'instance-state-name',
@@ -189,8 +199,10 @@ describe('lib', () => {
     it('no ASGs, no instances', async () => {
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const autoscaling = new AutoScalingClient({});
       const autoscalingMock = mockClient(autoscaling);
+      autoscalingMock.rejects(new Error('not mocked'));
       ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
         Reservations: []
       });
@@ -209,8 +221,10 @@ describe('lib', () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const autoscaling = new AutoScalingClient({});
-      mockClient(autoscaling);
+      const autoscalingMock = mockClient(autoscaling);
+      autoscalingMock.rejects(new Error('not mocked'));
       ec2Mock.on(DescribeImagesCommand).resolvesOnce({
         Images: [{
           ImageId: 'ami-1',
@@ -273,8 +287,10 @@ describe('lib', () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const autoscaling = new AutoScalingClient({});
-      mockClient(autoscaling);
+      const autoscalingMock = mockClient(autoscaling);
+      autoscalingMock.rejects(new Error('not mocked'));
       ec2Mock.on(DescribeImagesCommand, {
         Owners: ['self']
       }).resolvesOnce({
@@ -309,8 +325,10 @@ describe('lib', () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const autoscaling = new AutoScalingClient({});
-      mockClient(autoscaling);
+      const autoscalingMock = mockClient(autoscaling);
+      autoscalingMock.rejects(new Error('not mocked'));
       ec2Mock.on(DescribeImagesCommand, {
         Filters: [{
           Name: 'tag-key',
@@ -349,8 +367,10 @@ describe('lib', () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const autoscaling = new AutoScalingClient({});
-      mockClient(autoscaling);
+      const autoscalingMock = mockClient(autoscaling);
+      autoscalingMock.rejects(new Error('not mocked'));
       ec2Mock.on(DescribeImagesCommand, {
         Owners: ['self']
       }).resolvesOnce({
@@ -411,8 +431,10 @@ describe('lib', () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const autoscaling = new AutoScalingClient({});
       const autoscalingMock = mockClient(autoscaling);
+      autoscalingMock.rejects(new Error('not mocked'));
       ec2Mock.on(DescribeInstancesCommand).resolvesOnce({
         Reservations: [{
           Instances: [{
@@ -488,8 +510,10 @@ describe('lib', () => {
       const now = Date.parse('2023-05-29T12:00:00.000Z');
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       const autoscaling = new AutoScalingClient({});
-      mockClient(autoscaling);
+      const autoscalingMock = mockClient(autoscaling);
+      autoscalingMock.rejects(new Error('not mocked'));
       ec2Mock.on(DescribeImagesCommand, {
         Owners: ['self']
       }).resolvesOnce({
@@ -551,6 +575,7 @@ describe('lib', () => {
     it('happy', async () => {
       const ec2 = new EC2Client({});
       const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
       ec2Mock.on(DeregisterImageCommand, {
         ImageId: 'ami-1',
         DeleteAssociatedSnapshots: true
