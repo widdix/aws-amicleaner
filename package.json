@@ -21,7 +21,7 @@
     "@aws-sdk/client-auto-scaling": "3.859.0",
     "@aws-sdk/client-ec2": "3.859.0",
     "argparse": "2.0.1",
-    "p-limit": "6.2.0",
+    "p-limit": "7.3.0",
     "wildcard": "2.0.1"
   },
   "devDependencies": {
