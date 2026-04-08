@@ -46,6 +46,61 @@ describe('lib', () => {
       assert.strictEqual(regions.has('eu-west-2'), true);
       assert.strictEqual(regions.has('eu-west-3'), true);
     });
+    it('exclude exact region', async () => {
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
+      ec2Mock.on(DescribeRegionsCommand).resolvesOnce({
+        Regions: [{RegionName: 'eu-west-1'}, {RegionName: 'eu-west-2'}, {RegionName: 'eu-west-3'}]
+      });
+      const regions = await fetchRegions(ec2, ['eu-west-*'], ['eu-west-2']);
+      assert.strictEqual(regions.size, 2);
+      assert.strictEqual(regions.has('eu-west-1'), true);
+      assert.strictEqual(regions.has('eu-west-3'), true);
+    });
+    it('exclude wildcard region', async () => {
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
+      ec2Mock.on(DescribeRegionsCommand).resolvesOnce({
+        Regions: [
+          {RegionName: 'eu-west-1'}, {RegionName: 'eu-west-2'}, {RegionName: 'eu-west-3'},
+          {RegionName: 'me-central-1'}, {RegionName: 'me-south-1'},
+          {RegionName: 'us-east-1'}, {RegionName: 'us-east-2'}
+        ]
+      });
+      const regions = await fetchRegions(ec2, ['*'], ['me-*']);
+      assert.strictEqual(regions.size, 5);
+      assert.strictEqual(regions.has('me-central-1'), false);
+      assert.strictEqual(regions.has('me-south-1'), false);
+      assert.strictEqual(regions.has('eu-west-1'), true);
+      assert.strictEqual(regions.has('us-east-1'), true);
+    });
+    it('exclude with no include regions', async () => {
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
+      const regions = await fetchRegions(ec2, [], ['me-central-1']);
+      assert.strictEqual(regions.size, 1);
+      assert.strictEqual(regions.has(undefined), true);
+    });
+    it('multiple exclude regions', async () => {
+      const ec2 = new EC2Client({});
+      const ec2Mock = mockClient(ec2);
+      ec2Mock.rejects(new Error('not mocked'));
+      ec2Mock.on(DescribeRegionsCommand).resolvesOnce({
+        Regions: [
+          {RegionName: 'eu-west-1'}, {RegionName: 'eu-west-2'},
+          {RegionName: 'me-central-1'}, {RegionName: 'me-south-1'},
+          {RegionName: 'us-east-1'}
+        ]
+      });
+      const regions = await fetchRegions(ec2, ['*'], ['me-central-1', 'me-south-1']);
+      assert.strictEqual(regions.size, 3);
+      assert.strictEqual(regions.has('eu-west-1'), true);
+      assert.strictEqual(regions.has('eu-west-2'), true);
+      assert.strictEqual(regions.has('us-east-1'), true);
+    });
   });
   describe('fetchInUseAMIIDs', () => {
     it('Launch Configuration', async () => {

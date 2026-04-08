@@ -20,7 +20,8 @@ async function input(query) {
 }
 
 async function run({
-  regions: rawRegions,
+  regions: includeRegions,
+  excludeRegions,
   includeName,
   includeTagKey,
   includeTagValue,
@@ -47,7 +48,7 @@ async function run({
     return autoscaling[region];
   };
 
-  const regions = await fetchRegions(ec2Client('us-east-1'), rawRegions);
+  const regions = await fetchRegions(ec2Client('us-east-1'), includeRegions, excludeRegions);
   const amisPerRegion = await Promise.all([...regions].map(region => 
     fetchAMIs(now, ec2Client(region), autoscalingClient(region), includeName, includeTagKey, includeTagValue, excludeNewest, excludeInUse, excludeDays)
       .then(amis => amis.map(ami => ({
@@ -106,6 +107,9 @@ aws-amicleaner --include-name 'amiprefix-*' --exclude-newest 3 --exclude-days 5 
 To delete all AMIs tagged with CostCenter=X342-*-1111, are older than 7 days (default), are not the newest 5 images (default), and are not in use (default), run:
 aws-amicleaner --include-tag-key CostCenter --include-tag-value 'X342-*-1111'
 
+To delete all AMIs in all regions except me-central-1 and me-south-1:
+aws-amicleaner --region '*' --exclude-region me-central-1 --exclude-region me-south-1 --include-name 'amiprefix-*'
+
 Run the command without confirmation (useful in scripts):
 aws-amicleaner --include-tag-key CostCenter --include-tag-value 'X342-*-1111' --force-delete
 
@@ -114,6 +118,7 @@ aws-amicleaner --include-name 'amiprefix-*' --exclude-newest 0 --exclude-days 0 
 `
   });
   parser.add_argument('--region', {dest: 'regions',  type: 'string', action: 'append', default: [], help: 'The AWS region, e.g. us-east-1, arg can be used more than once, wildcard * supported'});
+  parser.add_argument('--exclude-region', {dest: 'excludeRegions', type: 'string', action: 'append', default: [], help: 'Exclude AWS region(s) from the resolved set, e.g. me-central-1, arg can be used more than once, wildcard * supported'});
   parser.add_argument('--include-name', {dest: 'includeName', type: 'string', help: 'The name that must be present, wildcard * supported'});
   parser.add_argument('--include-tag-key', {dest: 'includeTagKey', type: 'string', help: 'The tag key that must be present'});
   parser.add_argument('--include-tag-value', {dest: 'includeTagValue', type: 'string', help: 'The tag value (for the tag key) that must be present, wildcard * supported'});

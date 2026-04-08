@@ -20,21 +20,43 @@ function mapAMI(raw) {
   };
 }
 
-export async function fetchRegions(ec2, rawRegions) {
+export async function fetchRegions(ec2, includeRegions, excludeRegions = []) {
   const regions = new Set();
+  let allRegionNames = null;
 
-  if (rawRegions.length === 0) {
+  const fetchAllRegionNames = async () => {
+    if (allRegionNames === null) {
+      const {Regions} = await ec2.send(new DescribeRegionsCommand({}));
+      allRegionNames = Regions.map(r => r.RegionName);
+    }
+    return allRegionNames;
+  };
+
+  if (includeRegions.length === 0) {
     regions.add(undefined);
   }
 
-  rawRegions.filter(region => !region.includes('*')).forEach(region => regions.add(region));
+  includeRegions.filter(region => !region.includes('*')).forEach(region => regions.add(region));
 
-  const rawRegionsWithWildcard = rawRegions.filter(region => region.includes('*'));
-  if (rawRegionsWithWildcard.length !== 0) {
-    const {Regions} = await ec2.send(new DescribeRegionsCommand({}));
-    rawRegionsWithWildcard.forEach(rawRegionWithWildcard => {
-      wildcard(rawRegionWithWildcard, Regions.map(r => r.RegionName)).forEach(region => regions.add(region));
+  const includeRegionsWithWildcard = includeRegions.filter(region => region.includes('*'));
+  if (includeRegionsWithWildcard.length !== 0) {
+    const names = await fetchAllRegionNames();
+    includeRegionsWithWildcard.forEach(includeRegionWithWildcard => {
+      wildcard(includeRegionWithWildcard, names).forEach(region => regions.add(region));
     });
+  }
+
+  if (excludeRegions.length > 0) {
+    const resolvedExcludes = new Set();
+    excludeRegions.filter(region => !region.includes('*')).forEach(region => resolvedExcludes.add(region));
+    const excludeRegionsWithWildcard = excludeRegions.filter(region => region.includes('*'));
+    if (excludeRegionsWithWildcard.length !== 0) {
+      const names = await fetchAllRegionNames();
+      excludeRegionsWithWildcard.forEach(excludeRegionWithWildcard => {
+        wildcard(excludeRegionWithWildcard, names).forEach(region => resolvedExcludes.add(region));
+      });
+    }
+    resolvedExcludes.forEach(region => regions.delete(region));
   }
 
   return regions;
