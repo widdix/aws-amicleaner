@@ -37,6 +37,11 @@ A typical confirmation screen:
 Do you want to continue and remove 6 AMIs [y/N] ? : 
 ```
 
+To delete all AMIs in all regions except me-central-1 and me-south-1 where the name starts with amiprefix-:
+```bash
+npx aws-amicleaner --region '*' --exclude-region me-central-1 --exclude-region me-south-1 --include-name 'amiprefix-*'
+```
+
 To delete all AMIs in eu-west-* (eu-west-1, eu-west-2, eu-west-3) tagged with CostCenter=X342-*-1111, are older than 7 days (default), are not the newest 5 images (default), and are not in use (default), run:
 ```bash
 npx aws-amicleaner --region 'eu-west-*' --include-tag-key CostCenter --include-tag-value 'X342-*-1111'
@@ -57,6 +62,8 @@ npx aws-amicleaner --include-name 'amiprefix-*' --exclude-newest 0 --exclude-day
 ```
 -h, --help            show this help message and exit
 --region REGION       The AWS region, e.g. us-east-1, arg can be used more than once, wildcard * supported
+--exclude-region EXCLUDEREGION
+                      Exclude AWS region(s) from the resolved set, e.g. me-central-1, arg can be used more than once, wildcard * supported
 --include-name INCLUDENAME
                       The name that must be present, wildcard * supported
 --include-tag-key INCLUDETAGKEY
