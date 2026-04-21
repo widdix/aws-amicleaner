@@ -18,8 +18,8 @@
   },
   "homepage": "https://github.com/widdix/aws-amicleaner#readme",
   "dependencies": {
-    "@aws-sdk/client-auto-scaling": "3.1032.0",
-    "@aws-sdk/client-ec2": "3.1032.0",
+    "@aws-sdk/client-auto-scaling": "3.1033.0",
+    "@aws-sdk/client-ec2": "3.1033.0",
     "argparse": "2.0.1",
     "p-limit": "6.2.0",
     "wildcard": "2.0.1"
